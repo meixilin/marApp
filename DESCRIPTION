@@ -1,0 +1,10 @@
+Package: marApp
+Title: ShinyApp for Mutations-Area Relationship
+Version: 0.0.0.9000
+Authors@R: 
+    person("Meixi", "Lin", , "", role = "aut")
+Description: ShinyApp for Mutations-Area Relationship. 
+License: `use_mit_license()`
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.2
