@@ -89,9 +89,9 @@ function(input, output, session) {
         mardf <- reactive({
             # load data in mar package
             withProgress(message = 'Calculating MAR ...', {
-                mar::MARfastGT(coord = incoord,
-                               geno = ingeno,
-                               res = 0.01)
+                MARfastGT(coord = incoord,
+                          geno = ingeno,
+                          res = 0.01)
             })
         })
         output$print_mardf <- DT::renderDataTable({
@@ -120,7 +120,8 @@ function(input, output, session) {
         if (input$current_tab != "Mutations-area relationship") {
             updateTabItems(session, "current_tab", "Mutations-area relationship")
         }
-
-
     })
 }
+
+
+
