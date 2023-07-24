@@ -8,6 +8,9 @@ read_table <- function(mypath) {
     }
     output = read.table(mypath, header = 1, sep = "\t", stringsAsFactors = F,
                         quote = "", comment.char = "")
+    if (mysuffix == 'gz') {
+       close(mypath)
+    }
     return(output)
 }
 

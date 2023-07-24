@@ -5,18 +5,18 @@ function(input, output, session) {
         req(input$mode)
         if (input$mode == "Custom") {
             fileInput(inputId = "in_coords",
-                      label = HTML("Three columns: ID, LON, LAT.<br/>(*.txt; *.tsv)"),
+                      label = HTML("Three columns: ID, LON, LAT.<br/>(*.txt; *.tsv; *.gz)"),
                       placeholder = "Coordinates table.",
-                      accept = c(".txt", ".tsv"))
+                      accept = c(".txt", ".tsv", ".gz"))
         }
     })
     output$genomesSelect <- renderUI({
         req(input$mode)
         if (input$mode == "Custom") {
             fileInput(inputId = "in_genomes",
-                      label = HTML("Rows are samples, <br/>columns are SNPs (0/1/2 coded).<br/>(*.txt; *.tsv)"),
+                      label = HTML("Rows are samples, <br/>columns are SNPs (0/1/2 coded).<br/>(*.txt; *.tsv; *.gz)"),
                       placeholder = "Genotype table.",
-                      accept = c(".txt", ".tsv"))
+                      accept = c(".txt", ".tsv", ".gz"))
         }
     })
 
@@ -109,6 +109,11 @@ function(input, output, session) {
                     scale_x_log10() + scale_y_log10()
             }
             ggplotly(pp)
+        })
+
+        # Calculate MAR results
+        output$calc_mardf <- renderPrint({
+            sar_power(mardf()[,c('A_sq','M')])
         })
 
         # Switch to the MAR tab when the button is clicked

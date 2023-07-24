@@ -61,6 +61,13 @@ body <- dashboardBody(
                         title = "Mutations-area plot",
                         plotlyOutput("plot_mardf", height = "auto")
                     )
+                ),
+                fluidRow(
+                    box(
+                        width = 12,
+                        withMathJax(includeMarkdown("docs/mar_explanation.md")),
+                        verbatimTextOutput("calc_mardf")
+                    )
                 )
             )
         )
