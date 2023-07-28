@@ -7,78 +7,112 @@ header <- dashboardHeader(
 
 sidebar <- dashboardSidebar(
     width = sidewidth,
-    h4("Input validation"),
-    radioButtons("mode", label = "Run custom dataset or demo?",
-                 choices = c("Demo", "Custom"), selected = "Demo"),
-    uiOutput("coordsSelect"),
-    uiOutput("genomesSelect"),
-    actionButton("go1", "Load data", width = 120),
-    hr(),
-    # start MAR calculation
-    h4("Mutations-area relationship"),
-    checkboxInput("log_mar", "Plot MAR on log scale", value = FALSE),
-    actionButton("go2", "Calculate MAR", width = 120),
-    hr()
+    sidebarMenu(
+        menuItem("Upload data", tabName = "upload"),
+        menuItem("Calculate MAR", tabName = "mar"),
+        menuItem("Simulate extinction", tabName = "extsim")
+    )
+#
+#
+#     h4("Input validation"),
+#
+#     hr(),
+#     # start MAR calculation
+#     h4("Mutations-area relationship"),
+#
+#     hr()
 )
 
 body <- dashboardBody(
-    # wrap the tabBox in fluidRow so the Body does not overflow
-    fluidRow(
-        tabBox(
-            title = NULL, width = 12, id = "current_tab",
-            tabPanel(
-                "Input validation",
-                fluidRow(
-                    box(
-                        width = 6, height = 600,
-                        title = "Coordinate file preview",
-                        DT::dataTableOutput("print_coords")
-                    ),
-                    box(
-                        width = 6, height = 600,
-                        title = "Genotype file preview",
-                        DT::dataTableOutput("print_genomes")
-                    )
-                ),
-                fluidRow(
-                    box(
-                        width = 12,
-                        title = "Sample map",
-                        leafletOutput("map_coords")
-                    )
+    tags$head(tags$style(type='text/css', ".slider-animate-button { font-size: 20pt !important; }")),
+    chooseSliderSkin("Flat", color = "green"),
+    tabItems(
+        # First tab content
+        tabItem(
+            tabName = "upload",
+            fluidRow(
+                box(
+                    width = 12, collapsible = TRUE,
+                    title = "Input validation", status = "info",
+                    radioButtons("mode", label = "Run custom dataset or demo?",
+                                 choices = c("Demo", "Custom"), selected = "Demo"),
+                    uiOutput("uploadNotes"),
+                    uiOutput("coordsSelect"),
+                    uiOutput("genomesSelect"),
+                    uiOutput("goUpload")
                 )
             ),
-            tabPanel(
-                "Mutations-area relationship",
-                fluidRow(
-                    box(
-                        width = 6, height = 600,
-                        title = "MAR table",
-                        DT::dataTableOutput("print_mardf")
-                    ),
-                    box(
-                        width = 6, height = 600,
-                        title = "Mutations-area plot",
-                        plotlyOutput("plot_mardf", height = "auto")
-                    )
+            fluidRow(
+                box(
+                    width = 6, height = 600,
+                    title = "Coordinate file preview",
+                    DT::dataTableOutput("print_coords")
                 ),
-                fluidRow(
-                    box(
-                        width = 12,
-                        withMathJax(includeMarkdown("docs/mar_explanation.md")),
-                        verbatimTextOutput("calc_mardf")
-                    )
+                box(
+                    width = 6, height = 600,
+                    title = "Genotype file preview",
+                    DT::dataTableOutput("print_genomes")
+                )
+            ),
+            fluidRow(
+                box(
+                    width = 12,
+                    title = "Sample map",
+                    leafletOutput("map_coords")
+                )
+            )
+        ),
+        # Second tab content
+        tabItem(
+            tabName = "mar",
+            fluidRow(
+                box(
+                    width = 12, collapsible = TRUE,
+                    title = "Mutations-area relationship (MAR) options", status = "info",
+                    sliderInput("nrep", label = "Number of replicates", value = 5, min = 5, max = 50, step = 5),
+                    checkboxInput("log_mar", "Plot MAR on log scale", value = FALSE),
+                    actionButton("go2", "Calculate MAR", width = 120)
+                )
+            ),
+            fluidRow(
+                box(title = "Calculating the mutations-area relationship",
+                    width = 12,
+                    withMathJax(includeMarkdown("docs/mar_explanation.md")),
+                    verbatimTextOutput("calc_mardf")
+                )
+            ),
+            fluidRow(
+                box(
+                    width = 6, height = '600px',
+                    title = "Mutations-area example table",
+                    DT::dataTableOutput("print_mardf")
+                ),
+                box(
+                    width = 6, height = '600px',
+                    title = "Mutations-area example plot",
+                    plotlyOutput("plot_mardf", height = "auto")
+                )
+            )
+        ),
+        tabItem(
+            tabName =  'extsim',
+            fluidRow(
+                box(
+                    width = 12, collapsible = TRUE,
+                    title = "Extinction simulation options", status = "info",
+                    sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
+                                value = 0, min = 0, max = 100, step = 1,
+                                animate = animationOptions(interval = 100, loop = FALSE))
                 )
             )
         )
     )
 )
 
-
 dashboardPage(
-    header,
-    sidebar,
-    body,
-    skin = 'green'
+    header = header,
+    sidebar = sidebar,
+    body = body,
+    skin = "green"
 )
 
