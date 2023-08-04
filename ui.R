@@ -12,15 +12,6 @@ sidebar <- dashboardSidebar(
         menuItem("Calculate MAR", tabName = "mar"),
         menuItem("Simulate extinction", tabName = "extsim")
     )
-#
-#
-#     h4("Input validation"),
-#
-#     hr(),
-#     # start MAR calculation
-#     h4("Mutations-area relationship"),
-#
-#     hr()
 )
 
 body <- dashboardBody(
@@ -36,29 +27,29 @@ body <- dashboardBody(
                     title = "Input validation", status = "info",
                     radioButtons("mode", label = "Run custom dataset or demo?",
                                  choices = c("Demo", "Custom"), selected = "Demo"),
-                    uiOutput("uploadNotes"),
-                    uiOutput("coordsSelect"),
-                    uiOutput("genomesSelect"),
-                    uiOutput("goUpload")
+                    uiOutput("uploadNotes")
                 )
             ),
-            fluidRow(
-                box(
-                    width = 6, height = 600,
-                    title = "Coordinate file preview",
-                    DT::dataTableOutput("print_coords")
+            conditionalPanel(
+                condition = "input.mode == 'Demo' | input.go1",
+                fluidRow(
+                    box(
+                        width = 6, height = 600,
+                        title = "Coordinate file preview",
+                        DT::dataTableOutput("print_coords")
+                    ),
+                    box(
+                        width = 6, height = 600,
+                        title = "Genotype file preview",
+                        DT::dataTableOutput("print_genomes")
+                    )
                 ),
-                box(
-                    width = 6, height = 600,
-                    title = "Genotype file preview",
-                    DT::dataTableOutput("print_genomes")
-                )
-            ),
-            fluidRow(
-                box(
-                    width = 12,
-                    title = "Sample map",
-                    leafletOutput("map_coords")
+                fluidRow(
+                    box(
+                        width = 12,
+                        title = "Sample map",
+                        leafletOutput("map_coords")
+                    )
                 )
             )
         ),
@@ -101,8 +92,15 @@ body <- dashboardBody(
                     width = 12, collapsible = TRUE,
                     title = "Extinction simulation options", status = "info",
                     sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
-                                value = 0, min = 0, max = 100, step = 1,
-                                animate = animationOptions(interval = 100, loop = FALSE))
+                                value = 0, min = 0, max = 100, step = extstep,
+                                animate = animationOptions(interval = 1000, loop = FALSE))
+                )
+            ),
+            fluidRow(
+                box(
+                    width = 12,
+                    title = "Extinction map",
+                    leafletOutput("map_ext")
                 )
             )
         )

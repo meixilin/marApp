@@ -11,3 +11,11 @@ coord2raster <- function(coord, res = 1) {
     rr <- rasterize(coord, baser, fun = "count")
     return(rr)
 }
+
+step_raster <- function(rr, prop = 0.1) {
+    notna = cellStats(!is.na(rr), 'sum')
+    stepsize = ceiling(notna*prop)
+    return(stepsize)
+}
+
+

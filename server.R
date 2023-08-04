@@ -6,35 +6,22 @@ function(input, output, session) {
     output$uploadNotes <- renderUI({
         req(input$mode)
         if (input$mode == "Custom") {
-            includeMarkdown("docs/upload_req.md")
-        }
-    })
-    output$coordsSelect <- renderUI({
-        req(input$mode)
-        if (input$mode == "Custom") {
-            fileInput(inputId = "in_coords",
-                      label = "Coordinate file",
-                      accept = c(".txt", ".tsv", ".gz"))
-        }
-    })
-    output$genomesSelect <- renderUI({
-        req(input$mode)
-        if (input$mode == "Custom") {
-            fileInput(inputId = "in_genomes",
-                      label = "Genotype file",
-                      accept = c(".txt", ".tsv", ".gz"))
-        }
-    })
-    output$goUpload <- renderUI({
-        req(input$mode)
-        if (input$mode == "Custom") {
-            actionButton("go1", "Load data", width = 120)
+            tagList(
+                includeMarkdown("docs/upload_req.md"),
+                fileInput(inputId = "in_coords",
+                          label = "Coordinate file",
+                          accept = c(".txt", ".tsv", ".gz")),
+                fileInput(inputId = "in_genomes",
+                          label = "Genotype file",
+                          accept = c(".txt", ".tsv", ".gz")),
+                actionButton("go1", "Load data", width = 120)
+            )
         }
     })
 
     #######################################################################
     # Set up reactive values for coords and genomes to be passed to other events
-    values <- reactiveValues(cc = NULL, gg = NULL, rr = NULL)
+    values <- reactiveValues(cc = NULL, gg = NULL, rr = NULL, rrext = NULL, notna = NULL)
 
     #######################################################################
     # Load and print table demo by default. Load custom data when mode changed.
@@ -43,14 +30,9 @@ function(input, output, session) {
         # Load coords and genomes
         coords <- reactive({
             if (input$mode == "Custom") {
-                if (input$go1) {
-                    mypath = input$in_coords$datapath
-                    if (grepl(".tsv$|.txt$|.gz$",mypath)) {
-                        read_table(mypath)
-                    } else {
-                        stop('Unsupported coordinate file formats.')
-                    }
-                }
+                req(input$go1)
+                mypath = input$in_coords$datapath
+                validater(mypath)
             } else {
                 read_table('./data/demo_coords.tsv')
             }
@@ -58,29 +40,26 @@ function(input, output, session) {
 
         genomes <- reactive({
             if (input$mode == "Custom") {
-                if (input$go1) {
-                    mypath = input$in_genomes$datapath
-                    if (grepl(".tsv$|.txt$|.gz$",mypath)) {
-                        read_table(mypath)
-                    } else {
-                        stop('Unsupported genotype file formats.')
-                    }
-                }
+                req(input$go1)
+                mypath = input$in_genomes$datapath
+                validater(mypath)
             } else {
                 read_table('./data/demo_genomes.tsv.gz')
             }
         })
         # pass the function to values
-        values$cc = coords;
+        values$cc = coords
         values$gg = genomes
         values$rr = coord2raster(as.matrix(coords()[,-1]))
-        print(values$rr)
+        values$notna = cellStats(!is.na(values$rr), 'sum')
+        # print(values$notna)
 
         #######################################################################
         # Print data
         output$print_coords <- DT::renderDataTable({
             DT::datatable(coords()[1:20, ],
-                          options = list(scrollX = TRUE))
+                          options = list(scrollX = TRUE)) %>%
+                formatRound(., columns = c('LON', 'LAT'))
         })
         output$print_genomes <- DT::renderDataTable({
             DT::datatable(genomes()[1:20,1:20],
@@ -162,13 +141,27 @@ function(input, output, session) {
 
     #######################################################################
     # Run extinction simulations (only if MAR has been calculated)
-    points <- reactive({
-        req(input$a_ext, input$go2)
-        return(input$a_ext)
+    # Code inspiration: https://boazsobrado.com/blog/2018/02/08/leaflet-timeline-in-r/
+    # Render the leaflet map
+    output$map_ext <- leaflet::renderLeaflet({
+        leaflet() %>%
+            addTiles() %>%
+            addRasterImage(layerId = 'startcoord', values$rr, opacity = 0.1) %>%
+            setView(lng = 30, lat = 49, zoom = 3)
     })
-    observe({
-        print(points())
+
+    observeEvent(input$a_ext, {
+        print(input$a_ext)
+        if (input$a_ext > 0) {
+            toext = sampleRandom(values$rr, size = values$notna*extstep/100, cells = TRUE)[,'cell']
+            print(toext)
+            values$rr[toext] <- NA
+        }
+        leafletProxy("map_ext") %>%
+            removeImage(layerId =  'endcoord') %>%
+            addRasterImage(layerId = 'endcoord', values$rr, opacity = 0.8)
     })
+
 }
 
 

@@ -13,6 +13,7 @@ library(raster)
 
 sidewidth = 300
 nsnps = 1000
+extstep = 10
 options(shiny.maxRequestSize=30*1024^2) # maximum 30 MB upload
 
 theme_set(theme_bw(base_size = 12))

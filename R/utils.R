@@ -14,3 +14,10 @@ read_table <- function(mypath) {
     return(output)
 }
 
+
+validater <- function(mypath) {
+    validate(
+        need(!is.null(mypath), "Please upload file first."),
+        need(grepl(".tsv$|.txt$|.gz$",mypath), "Unsupported file formats.")
+    )
+}
