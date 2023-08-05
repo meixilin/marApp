@@ -21,7 +21,8 @@ function(input, output, session) {
 
     #######################################################################
     # Set up reactive values for coords and genomes to be passed to other events
-    values <- reactiveValues(cc = NULL, gg = NULL, rr = NULL, rrext = NULL, notna = NULL)
+    values <- reactiveValues(cc = NULL, gg = NULL, ggsub = NULL, M_all = NULL, extinds = NULL,
+                             rr = NULL, rrext = NULL, notna = NULL, r2i = NULL, aext = NULL, mext = 0)
 
     #######################################################################
     # Load and print table demo by default. Load custom data when mode changed.
@@ -47,12 +48,17 @@ function(input, output, session) {
                 read_table('./data/demo_genomes.tsv.gz')
             }
         })
+
         # pass the function to values
         values$cc = coords
         values$gg = genomes
+        values$ggsub = samp_geno(as.matrix(genomes()[,-1]), nsnps)
+        values$ggsubext = values$ggsub
+        values$M_all = calc_M(values$ggsub)
         values$rr = coord2raster(as.matrix(coords()[,-1]))
-        values$notna = cellStats(!is.na(values$rr), 'sum')
-        # print(values$notna)
+        values$rrext = values$rr
+        values$notna = raster::cellStats(!is.na(values$rr), 'sum')
+        values$r2i = raster::cellFromXY(values$rr, coords()[,-1])
 
         #######################################################################
         # Print data
@@ -88,9 +94,9 @@ function(input, output, session) {
             # load data in mar package
             withProgress(message = 'Calculating MAR ...', {
                 mardflist <- lapply(1:input$nrep, function(ii){
-                    # incProgress(1/input$nrep)
+                    incProgress(1/input$nrep)
                     # use seed to set representative run 1
-                    if (ii == 1) set.seed(123)
+                    if (ii == 1) set.seed(myseed)
                     ## Randomly subset genome matrix to 1000 SNPs
                     s_genome = ingeno[, sample(1:ncol(ingeno), nsnps, F)]
                     mardf <- MARfastGT(coord = incoord,
@@ -141,27 +147,42 @@ function(input, output, session) {
 
     #######################################################################
     # Run extinction simulations (only if MAR has been calculated)
-    # Code inspiration: https://boazsobrado.com/blog/2018/02/08/leaflet-timeline-in-r/
-    # Render the leaflet map
-    output$map_ext <- leaflet::renderLeaflet({
-        leaflet() %>%
-            addTiles() %>%
-            addRasterImage(layerId = 'startcoord', values$rr, opacity = 0.1) %>%
-            setView(lng = 30, lat = 49, zoom = 3)
-    })
-
     observeEvent(input$a_ext, {
-        print(input$a_ext)
-        if (input$a_ext > 0) {
-            toext = sampleRandom(values$rr, size = values$notna*extstep/100, cells = TRUE)[,'cell']
-            print(toext)
-            values$rr[toext] <- NA
+        values$aext = c(values$aext, input$a_ext)
+        # reset at 0%
+        if (input$a_ext == 0) values$rrext <- values$rr
+        # toextsize = the current habitat - the expected habitat with a_ext
+        toextsize = cellStats(!is.na(values$rrext), 'sum') - values$notna*(100-input$a_ext)/100
+        if (toextsize > 0) {
+            # this cannot be in a function, because rrext need to be passed across different a_ext
+            toext = sampleRandom(values$rrext, size = toextsize, cells = TRUE)[,'cell']
+            values$rrext[toext] <- NA
+            # get the individuals that are extincted in this cell
+            toextinds = cell2inds(values$r2i, toext)
+            values$extinds = c(values$extinds, toextinds)
+            # calculate proportion lost
+            values$mext = c(values$mext, extinct_geno(values))
         }
-        leafletProxy("map_ext") %>%
-            removeImage(layerId =  'endcoord') %>%
-            addRasterImage(layerId = 'endcoord', values$rr, opacity = 0.8)
-    })
 
+        output$map_ext <- renderPlot({
+            validate(need(toextsize >= 0, "Cannot reverse extinction"))
+            par(mar = c(4, 4, 4, 6))
+            plot(NULL,
+                 xlim = c(xmin(values$rr), xmax(values$rr)),
+                 ylim = c(ymin(values$rr), ymax(values$rr)),
+                 xlab = 'Longitude', ylab = 'Latitude',
+                 main = paste0(input$a_ext, '% area extinct'))
+            maps::map("world", col = "lightgray", border = "lightgray", fill = TRUE, boundary = FALSE, bg = "white",
+                      add = TRUE)
+            plot(values$rrext, col = bpy.colors(255), add = TRUE, legend.args = list(text = '# of genomes', side = 2))
+        })
+
+        extdf = data.frame(a_ext = values$aext,
+                           m_ext = values$mext)
+
+        print(extdf)
+        plot(extdf$a_ext, extdf$m_ext)
+    })
 }
 
 

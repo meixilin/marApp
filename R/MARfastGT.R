@@ -58,12 +58,7 @@ MARfastGT <- function(coord, geno, samples = 100, res = 0.05, quorum = T, minN =
         N <- length(SAM.in)
 
         # compute mutation count
-        M <- sum(apply(geno[SAM.in, , drop = F], 2, function(x) { # for every column of SNP matrix...
-            # count major and minor alleles
-            ac <- c((sum(x == 0, na.rm = T) * 2) + sum(x == 1, na.rm = T), (sum(x == 2, na.rm = T) * 2) + sum(x == 1, na.rm = T))
-            # return: if both alleles are >0, there is a mutation
-            return(sum(ac > 0) == 2)
-        }))
+        M <- calc_M(geno[SAM.in, , drop = F])
 
         ### compute area of square
         A_sq <- (x2 - x1) * (y2 - y1)

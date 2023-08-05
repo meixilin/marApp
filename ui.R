@@ -93,14 +93,14 @@ body <- dashboardBody(
                     title = "Extinction simulation options", status = "info",
                     sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
                                 value = 0, min = 0, max = 100, step = extstep,
-                                animate = animationOptions(interval = 1000, loop = FALSE))
+                                animate = animationOptions(interval = 300, loop = FALSE))
                 )
             ),
             fluidRow(
                 box(
                     width = 12,
                     title = "Extinction map",
-                    leafletOutput("map_ext")
+                    plotOutput("map_ext")
                 )
             )
         )

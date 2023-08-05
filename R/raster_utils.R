@@ -2,20 +2,19 @@
 
 coord2raster <- function(coord, res = 1) {
     # create edges of the raster
-    xmn <- range(coord[, 1])[1]
-    xmx <- range(coord[, 1])[2]
-    ymn <- range(coord[, 2])[1]
-    ymx <- range(coord[, 2])[2]
+    lonrange <- range(coord[, 1]) + c(-1, 1) * diff(range(coord[, 1])) * 0.01 # range coords ± 1% of study area (accomodate resolution errors)
+    latrange <- range(coord[, 2]) + c(-1, 1) * diff(range(coord[, 2])) * 0.01 # range coords ± 1% of study area
     #  create raster
-    baser <- raster(resolution = res, xmn = xmn, xmx = xmx, ymn = ymn, ymx = ymx)
+    baser <- raster(resolution = res,
+                    xmn = lonrange[1], xmx = lonrange[2],
+                    ymn = latrange[1], ymx = latrange[2])
     rr <- rasterize(coord, baser, fun = "count")
     return(rr)
 }
 
-step_raster <- function(rr, prop = 0.1) {
-    notna = cellStats(!is.na(rr), 'sum')
-    stepsize = ceiling(notna*prop)
-    return(stepsize)
+cell2inds <- function(r2i, cells) {
+    return(which(r2i %in% cells))
 }
+
 
 
