@@ -25,6 +25,7 @@ body <- dashboardBody(
                 box(
                     width = 12, collapsible = TRUE,
                     title = "Input validation", status = "info",
+                    h5('Demo data takes ~3s to load. Please be patient while the sample data is loading.'),
                     radioButtons("mode", label = "Run custom dataset or demo?",
                                  choices = c("Demo", "Custom"), selected = "Demo"),
                     uiOutput("uploadNotes")
@@ -93,7 +94,7 @@ body <- dashboardBody(
                     title = "Extinction simulation options", status = "info",
                     sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
                                 value = 0, min = 0, max = 100, step = extstep,
-                                animate = animationOptions(interval = 300, loop = FALSE))
+                                animate = animationOptions(interval = 200, loop = FALSE))
                 )
             ),
             fluidRow(
@@ -101,6 +102,18 @@ body <- dashboardBody(
                     width = 12,
                     title = "Extinction map",
                     plotOutput("map_ext")
+                )
+            ),
+            fluidRow(
+                # box(
+                #     width = 6, height = '600px',
+                #     title = "Extinction simulation table",
+                #     shiny::tableOutput("print_extdf")
+                # ),
+                box(
+                    width = 6, height = '600px',
+                    title = "Extinction simulation plot",
+                    plotlyOutput("plot_extdf", height = "auto")
                 )
             )
         )

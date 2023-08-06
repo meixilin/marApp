@@ -1,53 +1,62 @@
-# calculate quick MAR extinction statistics
-extinct_geno <- function(values) {
-    # calculate the number of mutations that are in the remaining individuals
-    reminds = setdiff(1:nrow(values$ggsub), values$extinds)
-    subgeno = values$ggsub[reminds, ]
-    M_left = calc_M(subgeno)
-    mext = 1-M_left/values$M_all
-    return(mext)
+ext_list <- function(a_ext, nstep) {
+    vec = vector('list', length = nstep)
+    names(vec) = as.character(a_ext)
+    return(vec)
 }
 
-
-
-
-MARfastEXT <- function(coord, rasterco, prop = 0.1, type = 'random') {
-    # assign raster cellid to the coord database
-    rasterid
-    # get the  present locations
-    gridpresent <- which(apply(values(raster_mutmaps), 1, function(x) any(!is.na(x))) == TRUE)
-    A <- length(gridpresent)
-    Astart <- A
-    xstep <- ceiling(xfrac * A)
-    # iterate
-    listres <- list()
-    # calculate original diversity
-    listres <- c(
-        listres,
-        list(mutdiv(raster_samples, raster_mutmaps, rest_mutmaps))
+ext_ref <- function() {
+    # Add reference lines for extinction
+    aa = seq(0,1,0.01)
+    sar_f <- function(x, z) {1-(1-x)^z}
+    nosar_f <- function(x, N) {-log(1-x)/log(N)}
+    output = data.frame(
+        aa = aa,
+        sar_m = sar_f(aa, 0.3),
+        nosar_m1 = nosar_f(aa, 1e+4),
+        nosar_m2 = nosar_f(aa, 1e+9)
     )
-    # extract the original rasterN
-    rasterN <- listres[[1]]$rasterN
-    while (A > 1) {
-        # extinct some grids
-        toextinct <- sample(gridpresent, xstep, replace = TRUE)
-        values(raster_mutmaps)[toextinct, ] <- NA
-        values(raster_samples)[toextinct] <- NA
-        values(rest_mutmaps)[toextinct, ] <- NA
-        # calculate diversity
-        listres <- c(
-            listres,
-            list(mutdiv(raster_samples, raster_mutmaps, rest_mutmaps, rasterN))
-        )
-        # recalculate area remaining
-        gridpresent <- which(apply(values(raster_mutmaps), 1, function(x) any(!is.na(x))) == TRUE)
-        A <- A - xstep
-    }
-    res <- listres %>%
-        do.call(rbind, .) %>%
-        data.frame() %>%
-        mutate(
-            ax = 1 - (asub / max(asub, na.rm = T)),
-            mx = 1 - (M / max(M, na.rm = T))
-        )
+    return(output)
 }
+
+
+MARfastEXT <- function(coord, geno, rasterco, extstep, type = 'random') {
+    # get starting mutation values
+    M_all = calc_M(geno)
+    # get starting number of rasters
+    A_all = raster::cellStats(!is.na(rasterco), 'sum')
+    # dictionary from raster cellid to individualids
+    raster2inds = raster::cellFromXY(rasterco, coord)
+    # set up list to store the cells and individual extincted at each step
+    a_ext = seq(0,100,by=extstep)
+    nstep = length(a_ext)
+    extinds = ext_list(a_ext, nstep)
+    extcells = ext_list(a_ext, nstep)
+    # set up data frame to store the mutations
+    extdf = data.frame(a_ext = a_ext, m_ext = NA)
+
+    for (a in a_ext) {
+        # toextsize = the current habitat - the expected habitat with a_ext
+        toextsize = raster::cellStats(!is.na(rasterco), 'sum') - A_all*(100-a)/100
+        if (toextsize > 0) {
+            toext = raster::sampleRandom(rasterco, size = toextsize, cells = TRUE)[,'cell']
+            extinds[[as.character(a)]] = cell2inds(raster2inds, toext)
+            extcells[[as.character(a)]] = toext
+            rasterco[toext] <- NA # operate on the raster to run extinction
+        }
+        # calculate leftover individuals by unpacking extinct individuals
+        reminds = setdiff(1:nrow(geno), unlist(unname(extinds)))
+        M_left = calc_M(geno[reminds, ])
+        extdf[which(extdf$a_ext == a), 'm_ext'] = 1-M_left/M_all
+    }
+
+    output = list(extinds,extcells,extdf)
+    names(output) = c('extinds', 'extcells', 'extdf')
+    return(output)
+}
+
+
+extcells = unlist(unname(EXTdata()$extcells[1:which(names(EXTdata()$extcells) == as.character(input$a_ext))]))
+extdf = EXTdata()$extdf %>%
+    dplyr::filter(a_ext <= input$a_ext) %>%
+    dplyr::mutate(pera_ext = a_ext/100)
+
