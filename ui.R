@@ -88,33 +88,44 @@ body <- dashboardBody(
         ),
         tabItem(
             tabName =  'extsim',
-            fluidRow(
-                box(
-                    width = 12, collapsible = TRUE,
-                    title = "Extinction simulation options", status = "info",
-                    sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
-                                value = 0, min = 0, max = 100, step = extstep,
-                                animate = animationOptions(interval = 200, loop = FALSE))
+            conditionalPanel(
+                condition = "input.mode == 'Demo'",
+                fluidRow(
+                    box(
+                        width = 12, collapsible = TRUE,
+                        title = "Extinction simulation options", status = "info",
+                        sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
+                                    value = 0, min = 0, max = 100, step = extstep,
+                                    animate = animationOptions(interval = 200, loop = FALSE))
+                    )
+                ),
+                fluidRow(
+                    box(
+                        width = 12,
+                        title = "Extinction map",
+                        plotOutput("map_ext")
+                    )
+                ),
+                fluidRow(
+                    box(
+                        width = 6, height = '500px',
+                        title = "Extinction simulation table",
+                        div(style='height:400px; overflow-y: scroll',
+                            tableOutput('print_extdf'))
+
+                    ),
+                    box(
+                        width = 6, height = '500px',
+                        title = "Extinction simulation plot",
+                        plotOutput("plot_extdf")
+                    )
                 )
             ),
-            fluidRow(
-                box(
-                    width = 12,
-                    title = "Extinction map",
-                    plotOutput("map_ext")
-                )
-            ),
-            fluidRow(
-                # box(
-                #     width = 6, height = '600px',
-                #     title = "Extinction simulation table",
-                #     shiny::tableOutput("print_extdf")
-                # ),
-                box(
-                    width = 6, height = '600px',
-                    title = "Extinction simulation plot",
-                    plotlyOutput("plot_extdf", height = "auto")
-                )
+            conditionalPanel(
+                condition = "input.mode == 'Custom'",
+                h5('Extinction simulation for custom dataset currently under development.
+                   Please check back later.
+                   Go to `Upload data` tab and select `Demo` to play the demo animation.')
             )
         )
     )

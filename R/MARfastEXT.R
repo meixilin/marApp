@@ -9,12 +9,16 @@ ext_ref <- function() {
     aa = seq(0,1,0.01)
     sar_f <- function(x, z) {1-(1-x)^z}
     nosar_f <- function(x, N) {-log(1-x)/log(N)}
-    output = data.frame(
-        aa = aa,
-        sar_m = sar_f(aa, 0.3),
-        nosar_m1 = nosar_f(aa, 1e+4),
-        nosar_m2 = nosar_f(aa, 1e+9)
-    )
+    df1 <- lapply(c(0.3,0.4,0.5), function(z) {
+        data.frame(aa = aa, type = 'mar', param = z, dm = sar_f(aa, z)) %>%
+            dplyr::mutate(id = paste(type, param))
+    })
+    df2 <- lapply(c(1e+4,1e+9), function(N){
+        data.frame(aa = aa, type = 'nomar', param = N, dm = nosar_f(aa, N)) %>%
+            dplyr::mutate(id = paste(type, param))
+    })
+    output = rbind(dplyr::bind_rows(df1), dplyr::bind_rows(df2))
+    output$dm[is.infinite(output$dm)] <- 1
     return(output)
 }
 
@@ -32,7 +36,7 @@ MARfastEXT <- function(coord, geno, rasterco, extstep, type = 'random') {
     extinds = ext_list(a_ext, nstep)
     extcells = ext_list(a_ext, nstep)
     # set up data frame to store the mutations
-    extdf = data.frame(a_ext = a_ext, m_ext = NA)
+    extdf = data.frame(a_ext_in = a_ext, m_ext = NA, a_ext = NA)
 
     for (a in a_ext) {
         # toextsize = the current habitat - the expected habitat with a_ext
@@ -46,7 +50,9 @@ MARfastEXT <- function(coord, geno, rasterco, extstep, type = 'random') {
         # calculate leftover individuals by unpacking extinct individuals
         reminds = setdiff(1:nrow(geno), unlist(unname(extinds)))
         M_left = calc_M(geno[reminds, ])
-        extdf[which(extdf$a_ext == a), 'm_ext'] = 1-M_left/M_all
+        A_left = raster::cellStats(!is.na(rasterco), 'sum')
+        extdf[which(extdf$a_ext_in == a), 'm_ext'] = 1-M_left/M_all
+        extdf[which(extdf$a_ext_in == a), 'a_ext'] = 1-A_left/A_all
     }
 
     output = list(extinds,extcells,extdf)
@@ -54,9 +60,4 @@ MARfastEXT <- function(coord, geno, rasterco, extstep, type = 'random') {
     return(output)
 }
 
-
-extcells = unlist(unname(EXTdata()$extcells[1:which(names(EXTdata()$extcells) == as.character(input$a_ext))]))
-extdf = EXTdata()$extdf %>%
-    dplyr::filter(a_ext <= input$a_ext) %>%
-    dplyr::mutate(pera_ext = a_ext/100)
 

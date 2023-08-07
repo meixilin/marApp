@@ -135,7 +135,7 @@ function(input, output, session) {
     # pre-calculate each step's raster cells and individuals that are being extincted.
     EXTdata <- reactive({
         MARfastEXT(coord = as.matrix(coords()[,-1]),
-                   geno = samp_geno(as.matrix(genomes()[,-1]), nsnps),
+                   geno = samp_geno(as.matrix(genomes()[,-1]), nsnps, myseed),
                    rasterco = rasterco(),
                    extstep = extstep)
     })
@@ -147,8 +147,7 @@ function(input, output, session) {
         rr = rasterco()
         extcells = unlist(unname(EXTdata()$extcells[1:which(names(EXTdata()$extcells) == as.character(input$a_ext))]))
         extdf = EXTdata()$extdf %>%
-            dplyr::filter(a_ext <= input$a_ext) %>%
-            dplyr::mutate(pera_ext = a_ext/100)
+            dplyr::filter(a_ext*100 <= input$a_ext)
         if (!is.null(extcells)) {rr[extcells] <- NA} # modify extinction area
         output$map_ext <- renderPlot({
             par(mar = c(4, 4, 4, 6))
@@ -162,13 +161,26 @@ function(input, output, session) {
             plot(rr, col = bpy.colors(255), add = TRUE, legend.args = list(text = '# of genomes', side = 2))
         })
 
-        output$plot_extdf <- renderPlotly({
-            pp <- ggplot() +
-                geom_point(data = extdf, mapping = aes(x = pera_ext, y = m_ext), size = 1, color = 'darkred') +
-                geom_line(data = EXTref, mapping =  aes(x = aa, y = sar_m), linetype = 'dashed') +
-                ggplot2::lims(x = c(0,1), y = c(0,1)) +
-                labs(x = '% of area lost', y = '% of mutations lost')
+        output$plot_extdf <- renderPlot({
+            x = EXTref[EXTref$id=='mar 0.3', 'aa']
+            y1 = EXTref[EXTref$id=='mar 0.3', 'dm']
+            y2 = EXTref[EXTref$id=='mar 0.5', 'dm']
+            y3 = EXTref[EXTref$id=='nomar 10000', 'dm']
+            y4 = EXTref[EXTref$id=='nomar 1e+09', 'dm']
+            plot(NULL,xlim = c(0,1), ylim = c(0,1), xlab = '% of area lost', ylab = '% of mutations lost')
+            polygon(c(x, rev(x)), c(y2, rev(y1)), col = "darkseagreen1", border = NA)
+            polygon(c(x, rev(x)), c(y3, rev(y4)), col = "lightgray", border = NA)
+            points(extdf$a_ext, extdf$m_ext, col = 'darkgreen', pch = 19)
+            legend('topleft',
+                   fill = c('darkgreen','darkseagreen1', 'lightgray'),
+                   legend = c('Simulation','MAR prediction', 'Individual prediction'))
         })
+
+        output$print_extdf <- renderTable({
+            extdf %>%
+                dplyr::select(a_ext, m_ext) %>%
+                dplyr::mutate_all(~sprintf("%.2f%%", . * 100))
+        }, width = '200%')
     })
 }
 

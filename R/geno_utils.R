@@ -1,5 +1,6 @@
 # sample geno
-samp_geno <- function(geno, nsnps) {
+samp_geno <- function(geno, nsnps, myseed = NULL) {
+    if (!is.null(myseed)) {set.seed(myseed)}
    geno[, sample(1:ncol(geno), nsnps, F)]
 }
 
