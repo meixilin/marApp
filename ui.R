@@ -131,10 +131,26 @@ body <- dashboardBody(
     )
 )
 
-dashboardPage(
-    header = header,
-    sidebar = sidebar,
-    body = body,
-    skin = "green"
+tagList(
+    dashboardPage(
+        header = header,
+        sidebar = sidebar,
+        body = body,
+        skin = "green"),
+    tags$footer(
+        "© 2023 MOI LAB",
+        style = "width:300px; padding:10px; background-color: #222D32; color: white"
+    )
 )
+
+# align = "center", style = "
+#               position:absolute;
+#               bottom:0;
+#               width:100%;
+#               height:50px;   /* Height of the footer */
+#               color: white;
+#               padding: 10px;
+#               background-color: black;
+#               z-index: 1000;"
+
 
