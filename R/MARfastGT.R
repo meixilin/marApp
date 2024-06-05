@@ -13,8 +13,8 @@
 #'
 #' @examples
 #' library(mar)
-#' data("coords-Arabidopsis_thaliana")
-#' data("geno-Arabidopsis_thaliana")
+#' load("ARCHIVE/coords-Arabidopsis_thaliana.rda")
+#' load("ARCHIVE/geno-Arabidopsis_thaliana.rda")
 #' ### Run MAR
 #' MAR = MARfastGT(coord = coords, geno = genomes, res = 0.01)
 #' ### Plot MAR
