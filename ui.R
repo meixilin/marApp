@@ -8,9 +8,9 @@ header <- dashboardHeader(
 sidebar <- dashboardSidebar(
     width = sidewidth,
     sidebarMenu(
-        menuItem("Upload data", tabName = "data")
-        # menuItem("Site frequency spectrum", tabName = "sfs"),
-        # menuItem("Mutations-area relationship", tabName = "mar"),
+        menuItem("Upload data", tabName = "data"),
+        menuItem("Site frequency spectrum", tabName = "sfs"),
+        menuItem("Mutations-area relationship", tabName = "mar")
         # menuItem("Extinction simulation", tabName = "ext")
     )
 )
@@ -60,75 +60,109 @@ body <- dashboardBody(
                     )
                 )
             )
+        ),
+        # Second tab content
+        tabItem(
+            tabName = "sfs",
+            fluidRow(
+                box(
+                    width = 12, collapsible = TRUE,
+                    title = "SFS and SAD options", status = "info",
+                    # add space as separator
+                    selectInput(inputId = "sad_model",
+                                label = "Select the species-abundance distribution (SAD) models to fit:",
+                                choices = sadchoices,
+                                selected = c("lnorm", "ls"),
+                                multiple = TRUE),
+                    actionButton("go2", "Compute SFS and fit SAD", width = 180),
+                )
+            ),
+            fluidRow(
+                box(title = "The site-frequency spectrum and species abundance distributions",
+                    width = 12,
+                    withMathJax(includeMarkdown("docs/sfs_explanation.md")),
+                )
+            ),
+            conditionalPanel(
+                condition = "input.go2",
+                fluidRow(
+                    box(
+                        width = 6,
+                        title = "Statistics for SAD fit",
+                        bt("SAD model fitting table:"),
+                        DT::dataTableOutput("print_AICtabs"),
+                        bt("SFS-based log-likelihoods:"),
+                        DT::dataTableOutput("print_statdf"),
+
+                    ),
+                    box(
+                        width = 6,
+                        title = "Site frequency spectrum",
+                        plotlyOutput("plot_sfsdf")
+                    )
+                )
+            )
+        ),
+        # Third tab content
+        tabItem(
+            tabName = "mar",
+            fluidRow(
+                box(
+                    width = 12, collapsible = TRUE,
+                    title = "Mutations-area relationship (MAR) options", status = "info",
+                    selectInput(inputId = "scheme",
+                                label = "Select the MARsampling scheme:",
+                                choices = mar:::.MARsampling_schemes,
+                                selected = "random"),
+                    selectInput(inputId = "Mtype",
+                                label = "Select the genetic diversity metrics: ",
+                                choices = Mchoices,
+                                selected = c("M", "thetapi"),
+                                multiple = TRUE),
+                    selectInput(inputId = "Atype",
+                                label = "Select the area metrics: ",
+                                choices = Achoices,
+                                selected = "A"),
+                    numericInput(inputId = "nrep",
+                                 label = "Number of replicates:",
+                                 value = 5,
+                                 min = 1,
+                                 max = 20),
+                    actionButton("go3", "Calculate MAR/GDAR", width = 150)
+                )
+            ),
+            fluidRow(
+                box(title = "The mutations (genetic diversity) area relationship",
+                    width = 12,
+                    withMathJax(includeMarkdown("docs/mar_explanation.md"))
+                )
+            ),
+            conditionalPanel(
+                condition = "input.go3",
+                fluidRow(
+                    box(title = "Summary of MAR/GDAR",
+                        width = 12,
+                        DT::dataTableOutput("print_marres"),
+
+                    )
+                ),
+                fluidRow(
+                    box(
+                        width = 6,
+                        title = "MAR sampling process",
+                        uiOutput("slider_mar"),
+                        plotOutput("anim_mardf")
+                    ),
+                    box(
+                        width = 6,
+                        title = "MAR/GDAR plots",
+                        checkboxInput("log_mar", "Plot MAR/GDAR on log scale", value = FALSE),
+                        selectInput("Mtype_plot", "Select the genetic diversity metrics to plot:", choices = Mchoices, selected = 'M'),
+                        plotlyOutput("plot_mardf", height = "auto")
+                    )
+                )
+            )
         )
-        # # Second tab content
-        # tabItem(
-        #     tabName = "sfs",
-        #     # fluidRow(
-        #     #     box(
-        #     #         width = 12, collapsible = TRUE,
-        #     #         title = "Input validation", status = "info",
-        #     #         h5('Demo data takes ~3s to load. Please be patient while the sample data is loading.'),
-        #     #         radioButtons("mode", label = "Run custom dataset or demo?",
-        #     #                      choices = c("Demo", "Custom"), selected = "Demo"),
-        #     #         uiOutput("uploadNotes")
-        #     #     )
-        #     # ),
-        #     # conditionalPanel(
-        #     #     condition = "input.mode == 'Demo' | input.go1",
-        #     #     fluidRow(
-        #     #         box(
-        #     #             width = 6, height = 600,
-        #     #             title = "Coordinate file preview",
-        #     #             DT::dataTableOutput("print_coords")
-        #     #         ),
-        #     #         box(
-        #     #             width = 6, height = 600,
-        #     #             title = "Genotype file preview",
-        #     #             DT::dataTableOutput("print_genomes")
-        #     #         )
-        #     #     ),
-        #     #     fluidRow(
-        #     #         box(
-        #     #             width = 12,
-        #     #             title = "Sample map",
-        #     #             leafletOutput("map_coords")
-        #     #         )
-        #     #     )
-        #     # )
-        # ),
-        # # Third tab content
-        # tabItem(
-        #     tabName = "mar",
-        #     fluidRow(
-        #         box(
-        #             width = 12, collapsible = TRUE,
-        #             title = "Mutations-area relationship (MAR) options", status = "info",
-        #             sliderInput("nrep", label = "Number of replicates", value = 5, min = 5, max = 50, step = 5),
-        #             checkboxInput("log_mar", "Plot MAR on log scale", value = FALSE),
-        #             actionButton("go2", "Calculate MAR", width = 120)
-        #         )
-        #     ),
-        #     fluidRow(
-        #         box(title = "Calculating the mutations-area relationship",
-        #             width = 12,
-        #             withMathJax(includeMarkdown("docs/mar_explanation.md")),
-        #             verbatimTextOutput("calc_mardf")
-        #         )
-        #     ),
-        #     fluidRow(
-        #         box(
-        #             width = 6, height = '600px',
-        #             title = "Mutations-area example table",
-        #             DT::dataTableOutput("print_mardf")
-        #         ),
-        #         box(
-        #             width = 6, height = '600px',
-        #             title = "Mutations-area example plot",
-        #             plotlyOutput("plot_mardf", height = "auto")
-        #         )
-        #     )
-        # ),
         # tabItem(
         #     tabName =  "ext",
         #     conditionalPanel(
@@ -185,15 +219,3 @@ tagList(
         style = "width:300px; padding:10px; background-color: #222D32; color: white"
     )
 )
-
-# align = "center", style = "
-#               position:absolute;
-#               bottom:0;
-#               width:100%;
-#               height:50px;   /* Height of the footer */
-#               color: white;
-#               padding: 10px;
-#               background-color: black;
-#               z-index: 1000;"
-
-

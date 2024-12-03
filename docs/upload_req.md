@@ -1,7 +1,7 @@
 When uploading your custom files for MAR calculations,
 please ensure that the files follow the formatting guidelines below:
 
-## Coordinate file
+**Coordinate file**
 
 1. Files should be tab-delimited or comma-delimited.
 2. Allowed file extensions are ".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz".
@@ -21,7 +21,7 @@ ID	LON	LAT
 5	34.3814	44.6419
 ```
 
-## Genotype file
+**Genotype file**
 
 Text file and VCF files are allowed. Overall,
 
@@ -30,11 +30,10 @@ Text file and VCF files are allowed. Overall,
 - The genotype data must not contain any missing values.
     - You can use tools like [beagle](https://faculty.washington.edu/browning/beagle/beagle.html) to impute missing data.
     - You can also filter the genotype data to retain only sites without missing data, e.g., `bcftools view -i 'N_MISSING == 0' ${VCF}`.
-- It works best with diploid genotype data, but can handle any ploidy as long as it is consistent across all samples. Use caution when interpreting results for non-diploid data.
-    - If heterozygous genotypes are not confidently called, you can force the data to be haploid (`option_geno$ploidy = 1`) by converting heterozygous genotypes to the alternative allele. Use caution when interpreting results.
+- The `marApp` only supports diploid organisms. For handling of other ploidy, please use the `mar` R package.
 - If the reference genome is divergent from the species/population of interest, set the major allele as the reference allele to avoid issues with ancestral state identification.
 
-### Text genotype file
+*Text genotype file*
 
 1. Files should be tab-delimited or comma-delimited.
 2. Allowed file extensions are ".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz".
@@ -58,12 +57,11 @@ Example file with 5 samples and 10 SNPs:
 0	0	2	0	0
 ```
 
-### VCF genotype file
+*VCF genotype file*
 
 1. Any standard VCF files are allowed as long as they follow the specifications below.
 2. VCF file handling is enabled by the `SeqArray` package.
 
-
-### Notes on PLINK genotype file
+*Notes on PLINK genotype file*
 
 1. PLINK genotype files are current not supported on the `marApp` platform but can be used with the `mar` package.

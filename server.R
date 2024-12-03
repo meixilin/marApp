@@ -96,63 +96,140 @@ function(input, output, session) {
 
     #########################################################################
     # Plot site frequency spectrum
+    observeEvent(input$go2, {
+        # Generate SFS and expected SFS
+        sfslist <- reactive({
+            AC <- mar:::.get_AC(gm()$geno)
+            N <- length(gm()$maps$sample.id)
+            genosfs <- mar::sfs(AC = AC, N = N, ploidy = 2, folded = TRUE)
+            neutralsfs <- mar::expsfs(lenAC = length(AC), N = N, ploidy = 2, folded = TRUE)
+            allsfs <- list(genosfs, neutralsfs)
+            names(allsfs) <- c("data", "neutral")
+            return(allsfs)
+        })
 
+        sadlist <- reactive({
+            if (!is.null(input$sad_model)) {
+                marsad <- mar:::MARsad(gm = gm(), sad_models = input$sad_model, folded = TRUE)
+            } else {
+                marsad <- list(AICtabs = NULL, sadsfss = NULL)
+            }
+            return(marsad)
+        })
 
-    # #######################################################################
-    # # Calculate MAR when the button is pressed
-    # observeEvent(input$go2, {
-    #     incoord <- as.matrix(coords()[,-1])
-    #     ingeno <- as.matrix(genomes()[,-1])
-    #     # Generate MAR data
-    #     mardf <- reactive({
-    #         # load data in mar package
-    #         withProgress(message = 'Calculating MAR ...', {
-    #             mardflist <- lapply(1:input$nrep, function(ii){
-    #                 incProgress(1/input$nrep)
-    #                 # use seed to set representative run 1
-    #                 if (ii == 1) set.seed(myseed)
-    #                 ## Randomly subset genome matrix to 1000 SNPs
-    #                 s_genome = samp_geno(ingeno, nsnps)
-    #                 mardf <- MARfastGT(coord = incoord,
-    #                                    geno = s_genome,
-    #                                    res = 1) # the resolution should be 1
-    #                 return(mardf)
-    #             })
+        # logLik comparisons
+        statdf <- reactive({
+            allsfs <- c(sfslist(), sadlist()$sadsfss)
+            # compare by logLik
+            ll_list <- sapply(allsfs, function(model) ll_sfs (model = model, data = genosfs))
+            statdf <- data.frame(model = names(allsfs),
+                                 logLik = unname(ll_list),
+                                 stringsAsFactors = FALSE)
+            return(statdf)
+        })
 
-    #         })
-    #     })
-    #     output$print_mardf <- DT::renderDataTable({
-    #         DT::datatable(mardf()[[1]] %>% dplyr::arrange(A_sq),
-    #                       options = list(scrollX = TRUE)) %>%
-    #             DT::formatRound(., "A_sq", digits = 2)
-    #     })
-    #     # Plot MAR results
-    #     output$plot_mardf <- renderPlotly({
-    #         pp <- ggplot(data = mardf()[[1]], mapping = aes(x = A_sq, y = M)) +
-    #             geom_point(size = 1, color = 'darkgreen') +
-    #             labs(x = 'Area sampled', y = 'Number of mutations')
-    #         if (input$log_mar) {
-    #             pp <- pp +
-    #                 scale_x_log10() +
-    #                 scale_y_log10() +
-    #                 stat_smooth(method = "lm", formula = y ~ x, geom = "smooth", color = "darkgray")
-    #         }
-    #         ggplotly(pp)
-    #     })
+        # outputs
+        output$print_AICtabs <- DT::renderDataTable({
+            if (!is.null(sadlist()$AICtabs)) {
+                DT::datatable(as.data.frame(sadlist()$AICtabs)) %>%
+                    DT::formatRound(., c("logLik","AIC","dLogLik","dAIC"))
+            }
+        })
 
-    #     # Calculate MAR results
-    #     output$calc_mardf <- renderPrint({
-    #         # print the first result
-    #         cat("Z_mar output for the plotted replicate:\n")
-    #         print(sar_power(mardf()[[1]][,c('A_sq','M')]))
-    #         # print the average result
-    #         cat("Summary of Z_mar in", input$nrep, "replicates\n")
-    #         splist <- sapply(1:input$nrep, function(ii) {
-    #             sp <- sar_power(mardf()[[ii]][,c('A_sq','M')])$sigConf[2,1]
-    #         })
-    #         summary(splist)
-    #     })
-    # })
+        output$print_statdf <- DT::renderDataTable({
+            DT::datatable(statdf() %>% dplyr::arrange(desc(logLik))) %>%
+                DT::formatRound(., "logLik")
+        })
+
+        # plot sfs
+        output$plot_sfsdf <- renderPlotly({
+            forplot <- mar:::.sfsl2df(c(sfslist(), sadlist()$sadsfss)) %>%
+                reshape2::melt(id.vars = 'AC',
+                               variable.name = 'model')
+            pp <- ggplot(data = forplot, mapping = aes(x = AC, y = value, fill = model)) +
+                geom_col(position = 'dodge') +
+                labs(x = 'Minor Allele Count', y = 'Number of Alleles')
+            ggplotly(pp)
+        })
+    })
+
+    #######################################################################
+    # Calculate MAR when the button is pressed
+    observeEvent(input$go3, {
+        # Generate MAR data
+        mardf <- reactive({
+            # load data in mar package
+            withProgress(message = 'Calculating MAR ...', {
+                MARsampling(gm = gm(),
+                            scheme = input$scheme,
+                            nrep = input$nrep,
+                            xfrac = 0.01)
+            })
+        })
+
+        # Build MAR
+        marres <- reactive({
+            mars <- lapply(input$Mtype, function(x) mar::MARcalc(mardf(), Mtype = x, Atype = input$Atype))
+            names(mars) <- input$Mtype
+            marsuml <- lapply(mars, .marsummary)
+            obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
+            return(obj)
+        })
+
+        # Print MAR results
+        output$print_marres <- DT::renderDataTable({
+            DT::datatable(marres()) %>%
+                DT::formatRound(., c("c", "z", "R2_adj")) %>%
+                DT::formatSignif(., c("c_p", "z_p"))
+        })
+
+        # Plot MAR results
+        output$plot_mardf <- renderPlotly({
+            forplot = mardf()[,c(input$Atype, input$Mtype_plot)] %>% na.omit()
+            c = marres()[rownames(marres()) == input$Mtype_plot,'c']
+            z = marres()[rownames(marres()) == input$Mtype_plot,'z']
+            # make predictions table (since stat_function does not work)
+            preddf <- data.frame(x = sort(unique(forplot[,1]))) %>%
+                dplyr::mutate(y = c * x^z)
+            colnames(preddf) <- colnames(forplot)
+            pp <- ggplot(data = forplot,
+                         mapping = aes_string(x = input$Atype, y = input$Mtype_plot)) +
+                geom_point(size = 1, color = 'darkgreen') +
+                geom_line(data = preddf, color = 'darkgray') +
+                labs(x = get_name(Achoices, input$Atype), y = get_name(Mchoices, input$Mtype_plot))
+
+            if (input$log_mar) {
+                pp <- pp +
+                    scale_x_log10() +
+                    scale_y_log10()
+            }
+            ggplotly(pp)
+        })
+
+        # generate an output slider
+        output$slider_mar <- renderUI({
+            sliderInput(inputId = "a_mar",
+                        label = "Sampling box size:",
+                        min = 1,
+                        max = nrow(mardf())/input$nrep,
+                        step = 1,
+                        value = 1,
+                        animate = animationOptions(interval = 1000, loop = FALSE))
+        })
+
+        output$anim_mardf <- renderPlot({
+            req(input$a_mar)
+            # get the extdf
+            bboxlist <- lapply(strsplit(mardf()$extent, ';'), as.integer)
+            idx <- (input$a_mar - 1) * input$nrep + 1
+            par(mar = c(5.1, 4.1, 4.1, 4.1))
+            raster::plot(raster::extent(gm()$maps$samplemap), xlab = 'lon', ylab = 'lat')
+            raster::plot(gm()$maps$samplemap, add = T, legend.mar = 3, legend.args = list(text = '# of genomes', side = 2))
+            for (ii in idx:(idx+input$nrep-1)) {
+                plot(mar:::.rowcol_extent(gm()$maps, bbox = bboxlist[[ii]]), col = 'black', add = T)
+            }
+        })
+    })
 
     # #######################################################################
     # # Run extinction simulations (only if MAR has been calculated)
