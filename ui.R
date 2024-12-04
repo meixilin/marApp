@@ -10,8 +10,8 @@ sidebar <- dashboardSidebar(
     sidebarMenu(
         menuItem("Upload data", tabName = "data"),
         menuItem("Site frequency spectrum", tabName = "sfs"),
-        menuItem("Mutations-area relationship", tabName = "mar")
-        # menuItem("Extinction simulation", tabName = "ext")
+        menuItem("Mutations-area relationship", tabName = "mar"),
+        menuItem("Extinction simulation", tabName = "ext")
     )
 )
 
@@ -143,7 +143,7 @@ body <- dashboardBody(
                     box(title = "Summary of MAR/GDAR",
                         width = 12,
                         DT::dataTableOutput("print_marres"),
-
+                        downloadButton('download_mardf', 'Download data')
                     )
                 ),
                 fluidRow(
@@ -158,53 +158,48 @@ body <- dashboardBody(
                         title = "MAR/GDAR plots",
                         checkboxInput("log_mar", "Plot MAR/GDAR on log scale", value = FALSE),
                         selectInput("Mtype_plot", "Select the genetic diversity metrics to plot:", choices = Mchoices, selected = 'M'),
-                        plotlyOutput("plot_mardf", height = "auto")
+                        plotlyOutput("plot_mardf")
+                    )
+                )
+            )
+        ),
+        tabItem(
+            tabName =  "ext",
+            fluidRow(
+                box(
+                    width = 12, collapsible = TRUE,
+                    title = "MAR extinction simulations", status = "info",
+                    bt("To change simulation options, click on the previous
+                       `Mutations-area relationship` tab."),
+                    actionButton("go4", "Simulate extinction", width = 150)
+                )
+            ),
+            conditionalPanel(
+                condition = "input.go4",
+                fluidRow(
+                    box(title = "Summary of MAR/GDAR extinction",
+                        width = 12,
+                        DT::dataTableOutput("print_extres"),
+                        downloadButton('download_extdf', 'Download data')
+                    )
+                ),
+                fluidRow(
+                    box(
+                        width = 6,
+                        title = "MAR extinction process",
+                        uiOutput("select_ext"),
+                        uiOutput("slider_ext"),
+                        plotOutput("anim_extdf")
+                    ),
+                    box(
+                        width = 6,
+                        title = "MAR/GDAR extinction plots",
+                        selectInput("Mtype_plot", "Select the genetic diversity metrics to plot:", choices = Mchoices, selected = 'M'),
+                        plotlyOutput("plot_extdf")
                     )
                 )
             )
         )
-        # tabItem(
-        #     tabName =  "ext",
-        #     conditionalPanel(
-        #         condition = "input.mode == 'Demo'",
-        #         fluidRow(
-        #             box(
-        #                 width = 12, collapsible = TRUE,
-        #                 title = "Extinction simulation options", status = "info",
-        #                 sliderInput("a_ext", label = "(Apprx.) percent of area extincted",
-        #                             value = 0, min = 0, max = 100, step = extstep,
-        #                             animate = animationOptions(interval = 200, loop = FALSE))
-        #             )
-        #         ),
-        #         fluidRow(
-        #             box(
-        #                 width = 12,
-        #                 title = "Extinction map",
-        #                 plotOutput("map_ext")
-        #             )
-        #         ),
-        #         fluidRow(
-        #             box(
-        #                 width = 6, height = '500px',
-        #                 title = "Extinction simulation table",
-        #                 div(style='height:400px; overflow-y: scroll',
-        #                     tableOutput('print_extdf'))
-
-        #             ),
-        #             box(
-        #                 width = 6, height = '500px',
-        #                 title = "Extinction simulation plot",
-        #                 plotOutput("plot_extdf")
-        #             )
-        #         )
-        #     ),
-        #     conditionalPanel(
-        #         condition = "input.mode == 'Custom'",
-        #         h5('Extinction simulation for custom dataset currently under development.
-        #            Please check back later.
-        #            Go to `Upload data` tab and select `Demo` to play the demo animation.')
-        #     )
-        # )
     )
 )
 
@@ -215,7 +210,7 @@ tagList(
         body = body,
         skin = "green"),
     tags$footer(
-        "© 2024 MOI LAB",
+        "© 2024 MOI LAB. Developed by Meixi Lin.",
         style = "width:300px; padding:10px; background-color: #222D32; color: white"
     )
 )
