@@ -167,7 +167,8 @@ function(input, output, session) {
                 MARsampling(gm = gm(),
                             scheme = input$scheme,
                             nrep = input$nrep,
-                            xfrac = 0.01)
+                            xfrac = 0.01,
+                            quorum = TRUE)
             })
         })
 

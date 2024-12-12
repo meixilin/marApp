@@ -122,7 +122,7 @@ body <- dashboardBody(
                     selectInput(inputId = "Atype",
                                 label = "Select the area metrics: ",
                                 choices = Achoices,
-                                selected = "A"),
+                                selected = "Asq"),
                     numericInput(inputId = "nrep",
                                  label = "Number of replicates:",
                                  value = 5,
