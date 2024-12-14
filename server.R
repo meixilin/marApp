@@ -31,10 +31,6 @@ function(input, output, session) {
             obj = mar::marmaps(mydata, mapres = NULL, mapcrs = mycrs)
         } else {
             obj = mar::gm1001g$maps
-            # TODO: raster_3.5-15 cannot handle output from raster_3.6-20
-            if (is.na(raster::crs(obj$samplemap)@projargs)) {
-                raster::crs(obj$samplemap) = mycrs
-            }
         }
         return(obj)
     })
@@ -209,7 +205,7 @@ function(input, output, session) {
                 dplyr::mutate(y = c * x^z)
             colnames(preddf) <- colnames(forplot)
             pp <- ggplot(data = forplot,
-                         mapping = aes_string(x = input$Atype, y = input$Mtype_plot)) +
+                         mapping = aes(x = .data[[input$Atype]], y = .data[[input$Mtype_plot]])) +
                 geom_point(size = 1, color = 'darkgreen') +
                 geom_line(data = preddf, color = 'darkgray') +
                 labs(x = get_name(Achoices, input$Atype), y = get_name(Mchoices, input$Mtype_plot))
@@ -299,7 +295,7 @@ function(input, output, session) {
                 dplyr::mutate(y = 1-(1-x)^z)
             colnames(preddf) <- colnames(forplot)[1:2]
             pp <- ggplot(data = forplot,
-                         mapping = aes_string(x = input$Atype, y = input$Mtype_plot, color = 'repid')) +
+                         mapping = aes(x = .data[[input$Atype]], y = .data[[input$Mtype_plot]], color = .data[['repid']])) +
                 geom_point(size = 1) +
                 geom_line(data = preddf, color = 'darkgray') +
                 scale_color_gradient(low = "lightgreen", high = "darkgreen") +
