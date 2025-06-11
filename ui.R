@@ -8,6 +8,7 @@ header <- dashboardHeader(
 sidebar <- dashboardSidebar(
     width = sidewidth,
     sidebarMenu(
+        menuItem("Conservation estimator", tabName = "con"),
         menuItem("Upload data", tabName = "data"),
         menuItem("Site frequency spectrum", tabName = "sfs"),
         menuItem("Mutations-area relationship", tabName = "mar"),
@@ -19,6 +20,34 @@ body <- dashboardBody(
     tags$head(tags$style(type='text/css', ".slider-animate-button { font-size: 20pt !important; }")),
     chooseSliderSkin("Flat", color = "green"),
     tabItems(
+        # Zero tab for decisions
+        tabItem(
+            tabName = "con",
+            fluidRow(
+                box(
+                    width = 12,
+                    title = "Conservation scenarios", status = "info",
+                    radioButtons("mode0",
+                                 "Estimate genetic diversity loss or build habitat protection goals?",
+                                 choices = mode0_choices, selected = "estimate loss"),
+                    sliderInput("structure_slider", "Adjust population structure (low to high):",
+                                min = 0, max = 1, value = 0.3, step = 0.01),
+                    uiOutput("conInput"),
+                    actionButton("go0", "Estimate", width = 120)
+                )
+            ),
+            conditionalPanel(
+                condition = "input.go0",
+                fluidRow(
+                    box(
+                        width = 12,
+                        title = "Genetic diversity estimation",
+                        uiOutput("reportUI"),
+                        downloadButton("downloadReport", "Download report")
+                    ),
+                )
+            )
+        ),
         # First tab content
         tabItem(
             tabName = "data",
@@ -53,10 +82,10 @@ body <- dashboardBody(
                         width = 12,
                         title = "Genomaps object",
                         leafletOutput("map_genomaps"),
-                        h5("`Sample Raster` layer shows number of samples in grouped cells.\n
-                           Given Leaflet's automatic reprojection, some cells might be displaced."),
-                        h5("`Sample Points` layer shows inputted sample geo-locations. \n
-                           Sample IDs are available when selected."),
+                        # h5("`Sample Raster` layer shows number of samples in grouped cells.\n
+                        #    Given Leaflet's automatic reprojection, some cells might be displaced."),
+                        # h5("`Sample Points` layer shows inputted sample geo-locations. \n
+                        #    Sample IDs are available when selected."),
                     )
                 )
             )

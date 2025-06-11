@@ -14,11 +14,15 @@ library(reshape2)
 # library(sads)
 library(SeqArray)
 library(sf) # Need this for crs() call to work
-# library(raster) # Had to be commented out otherwise cannot load package
+library(raster) # Had to be commented out otherwise cannot load package
 library(mar)
 
 sidewidth = 300
 mycrs = "+proj=longlat +datum=WGS84"
+
+mode0_choices = c("estimate loss", "build goals")
+con_reports = c("report_loss.Rmd", "report_goal.Rmd")
+names(con_reports) = mode0_choices
 
 sadchoices = mar:::.sad_models
 names(sadchoices) = c("Broken stick", "Geometric", "Lognormal", "Log-series", "Neutral metacommunity", "Weibull")

@@ -2,7 +2,56 @@
 
 function(input, output, session) {
     #######################################################################
-    # renderUI for input selection
+    # renderUI for inputting conservation decisions
+    output$conInput <- renderUI({
+        req(input$mode0)
+        if (input$mode0 == "estimate loss") {
+            numericInput("habitat_loss", "Proportion of habitat lost (0 to 1):",
+                         value = 0.3, min = 0, max = 1, step = 0.01)
+        } else{
+            numericInput("gd_target", "Proportion of genetic diversity to protect (0 to 1):",
+                         value = 0.9, min = 0, max = 1, step = 0.01)
+        }
+    })
+
+    #######################################################################
+    # Generate a report for genetic diversity conservation for download
+
+    observeEvent(input$go0, {
+        req(input$structure_slider, input$mode0)
+
+        params <- list(
+            mode = isolate(input$mode0),
+            structure = isolate(input$structure_slider),
+            aloss = isolate(input$habitat_loss),
+            gtarg = isolate(input$gd_target)
+        )
+
+        out_html <- "report.html"
+        rmarkdown::render(
+            input = con_reports[input$mode0],
+            output_file = out_html,
+            params = params,
+            envir = new.env(parent = globalenv())
+        )
+
+        output$reportUI <- renderUI({
+            withMathJax(includeHTML(out_html))
+
+        })
+
+        output$downloadReport <- downloadHandler(
+            filename = function() {
+                paste0('Report_', Sys.Date(), '.html')
+            },
+            content = function(file) {
+                file.copy(out_html, file)
+            }
+        )
+    })
+
+    #######################################################################
+    # renderUI for Upload data input selection
     output$uploadNotes <- renderUI({
         req(input$mode)
         if (input$mode == "Custom") {
@@ -10,10 +59,10 @@ function(input, output, session) {
                 includeMarkdown("docs/upload_req.md"),
                 fileInput(inputId = "in_coords",
                           label = "Coordinate file",
-                          accept = c(".csv", ".txt", ".tsv", ".gz")),
+                          accept = c(".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz")),
                 fileInput(inputId = "in_genomes",
                           label = "Genotype file",
-                          accept = c(".txt", ".vcf.gz", "txt.gz"))
+                          accept = c(".txt", ".txt.gz", ".tsv", ".tsv.gz", ".vcf", ".vcf.gz"))
             )
         }
     })
@@ -287,12 +336,13 @@ function(input, output, session) {
         output$plot_extdf <- renderPlotly({
             forplot = extdf()[,c(input$Atype, input$Mtype_plot, 'repid')] %>% na.omit()
             # generate percentages data
-            forplot[,1:2] <- apply(forplot[,1:2], 2, function(x) {1 - x/max(x)})
+            forplot[,1] <- 1 - forplot[,1]/max(forplot[,1])
+            forplot[,2] <- forplot[,2]/max(forplot[,2])
             # get c and z again from EXT output
             z = extres()[rownames(extres()) == input$Mtype_plot,'z']
             # make predictions table (since stat_function does not work)
             preddf <- data.frame(x = sort(unique(forplot[,1]))) %>%
-                dplyr::mutate(y = 1-(1-x)^z)
+                dplyr::mutate(y = (1-x)^z)
             colnames(preddf) <- colnames(forplot)[1:2]
             pp <- ggplot(data = forplot,
                          mapping = aes(x = .data[[input$Atype]], y = .data[[input$Mtype_plot]], color = .data[['repid']])) +
@@ -302,7 +352,7 @@ function(input, output, session) {
                 scale_x_continuous(labels = scales::percent) +
                 scale_y_continuous(labels = scales::percent) +
                 labs(x = paste0("% of ", get_name(Achoices, input$Atype), " lost"),
-                     y = paste0("% of ", get_name(Mchoices, input$Mtype_plot), " lost")) +
+                     y = paste0("% of ", get_name(Mchoices, input$Mtype_plot), " remained")) +
                 theme(legend.position = 'none')
             ggplotly(pp)
         })
@@ -337,7 +387,8 @@ function(input, output, session) {
     })
 
     session$onSessionEnded(function() {
-        tempfiles = c(list.files(pattern = "^mardf"), list.files(pattern = "^extdf"))
+        tempfiles = c(list.files(pattern = "^mardf"), list.files(pattern = "^extdf"), list.files(pattern = 'report.html'),
+                      list.files(pattern = '^Report.+html$'))
         if (length(tempfiles) > 0) {
             sapply(tempfiles, unlink)
         }
