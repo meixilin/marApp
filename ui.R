@@ -32,7 +32,10 @@ body <- dashboardBody(
                                  choices = mode0_choices, selected = "estimate loss"),
                     sliderInput("structure_slider", "Adjust population structure (low to high):",
                                 min = 0, max = 1, value = 0.3, step = 0.01),
-                    uiOutput("conInput"),
+                    numericInput("habitat_loss", "Proportion of habitat lost (0 to 1):",
+                         value = 0.3, min = 0, max = 1, step = 0.01),
+                    numericInput("gd_target", "Proportion of genetic diversity to protect (0 to 1):",
+                         value = 0.9, min = 0, max = 1, step = 0.01),
                     actionButton("go0", "Estimate", width = 120)
                 )
             ),
@@ -201,6 +204,12 @@ body <- dashboardBody(
                     bt("To change simulation options, click on the previous
                        `Mutations-area relationship` tab."),
                     actionButton("go4", "Simulate extinction", width = 150)
+                )
+            ),
+            fluidRow(
+                box(title = "Extinction prediction using MAR",
+                    width = 12,
+                    withMathJax(includeMarkdown("docs/ext_explanation.md"))
                 )
             ),
             conditionalPanel(

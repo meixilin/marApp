@@ -2,29 +2,15 @@
 
 function(input, output, session) {
     #######################################################################
-    # renderUI for inputting conservation decisions
-    output$conInput <- renderUI({
-        req(input$mode0)
-        if (input$mode0 == "estimate loss") {
-            numericInput("habitat_loss", "Proportion of habitat lost (0 to 1):",
-                         value = 0.3, min = 0, max = 1, step = 0.01)
-        } else{
-            numericInput("gd_target", "Proportion of genetic diversity to protect (0 to 1):",
-                         value = 0.9, min = 0, max = 1, step = 0.01)
-        }
-    })
-
-    #######################################################################
     # Generate a report for genetic diversity conservation for download
-
-    observeEvent(input$go0, {
+    report <- eventReactive(input$go0, {
         req(input$structure_slider, input$mode0)
 
         params <- list(
-            mode = isolate(input$mode0),
-            structure = isolate(input$structure_slider),
-            aloss = isolate(input$habitat_loss),
-            gtarg = isolate(input$gd_target)
+            mode = input$mode0,
+            structure = input$structure_slider,
+            aloss = input$habitat_loss,
+            gtarg = input$gd_target
         )
 
         out_html <- "report.html"
@@ -34,10 +20,12 @@ function(input, output, session) {
             params = params,
             envir = new.env(parent = globalenv())
         )
+        return(out_html)
+    })
 
+    observeEvent(input$go0, {
         output$reportUI <- renderUI({
-            withMathJax(includeHTML(out_html))
-
+            withMathJax(includeHTML(report()))
         })
 
         output$downloadReport <- downloadHandler(
@@ -45,7 +33,7 @@ function(input, output, session) {
                 paste0('Report_', Sys.Date(), '.html')
             },
             content = function(file) {
-                file.copy(out_html, file)
+                file.copy(report(), file)
             }
         )
     })
