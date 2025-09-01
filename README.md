@@ -1,14 +1,14 @@
-# For deployment
+# `marApp`: Mutations-Area Relationship shinyApp
 
-2024-12-12T20:19:44.421717+00:00 shinyapps[9502711]:  Functions found when exporting methods from the namespace ‘raster’ which are not S4 generic: ‘colSums’, ‘rowSums’
-2024-12-12T20:19:44.426314+00:00 shinyapps[9502711]: Execution halted
+## Overview
+`marApp` is an web-based application that enables users to perform MAR analysis without requirements for coding experiences. Users can upload their genotype and coordinate data, select the desired analysis steps, and visualize the results.
 
-https://github.com/maquins/ewars_Plus_2023/issues/1
-https://github.com/r-tmap/tmap/issues/620
-https://github.com/r-tmap/tmap/issues/621
+## Troubleshooting
 
-Seems like R4.4.2 is too much .
+### 1. No output is generated in the `Mutations-area relationship` tab.
 
-# For deployment
-
-Need to install MAR from github so when deploying it finds the correct files. 
+1. Reload the web page.
+2. Navigate to the `Upload data` tab.
+3. Click the `Load data` button to load the example data. Or upload your own data and click the `Load data` button.
+4. Navigate to the `Mutations-area relationship` tab.
+5. Click the `Calculate MAR/GDAR` button.

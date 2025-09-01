@@ -1,6 +1,11 @@
 When uploading your custom files for MAR calculations,
 please ensure that the files follow the formatting guidelines below:
 
+**Notes on sensitive data**
+
+The marApp portal stores and processes all data on [shinyapps.io](https://www.shinyapps.io) servers.
+Although shinyapps.io is secure-by-design, users should avoid uploading sensitive data (e.g. endangered species locations) without appropriate permissions and safeguards.
+
 **Coordinate file**
 
 1. Files should be tab-delimited or comma-delimited.
@@ -65,3 +70,7 @@ Example file with 5 samples and 10 SNPs:
 *Notes on PLINK genotype file*
 
 1. PLINK genotype files are current not supported on the `marApp` platform but can be used with the `mar` package.
+
+
+
+
