@@ -1,5 +1,3 @@
-
-
 function(input, output, session) {
     #######################################################################
     # Generate a report for genetic diversity conservation for download
@@ -30,7 +28,7 @@ function(input, output, session) {
 
         output$downloadReport <- downloadHandler(
             filename = function() {
-                paste0('Report_', Sys.Date(), '.html')
+                paste0("Report_", Sys.Date(), ".html")
             },
             content = function(file) {
                 file.copy(report(), file)
@@ -45,29 +43,32 @@ function(input, output, session) {
         if (input$mode == "Custom") {
             tagList(
                 includeMarkdown("docs/upload_req.md"),
-                fileInput(inputId = "in_coords",
-                          label = "Coordinate file",
-                          accept = c(".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz")),
-                fileInput(inputId = "in_genomes",
-                          label = "Genotype file",
-                          accept = c(".txt", ".txt.gz", ".tsv", ".tsv.gz", ".vcf", ".vcf.gz"))
+                fileInput(
+                    inputId = "in_coords",
+                    label = "Coordinate file",
+                    accept = c(".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz")
+                ),
+                fileInput(
+                    inputId = "in_genomes",
+                    label = "Genotype file",
+                    accept = c(".txt", ".txt.gz", ".tsv", ".tsv.gz", ".vcf", ".vcf.gz")
+                )
             )
         }
     })
 
     #######################################################################
-    # Load and generate genomaps object. Use gm1001g as default.
-
-    #######################################################################
-    # Load and build genomaps object
+    # Load and build genomaps object. Use gm1001g as default.
+    # Custom uploads are validated: parsing errors surface an informative
+    # message instead of crashing the app.
     mapsdata <- reactive({
         req(input$go1)
         if (input$mode == "Custom") {
-            mypath = input$in_coords$datapath
-            mydata = mar::lonlat_parser(mypath)
-            obj = mar::marmaps(mydata, mapres = NULL, mapcrs = mycrs)
+            req(input$in_coords)
+            mypath <- input$in_coords$datapath
+            obj <- safe_parse(mar::lonlat_parser(mypath, mapres = NULL, mapcrs = mycrs), "coordinate file")
         } else {
-            obj = mar::gm1001g$maps
+            obj <- mar::gm1001g$maps
         }
         return(obj)
     })
@@ -75,27 +76,26 @@ function(input, output, session) {
     genodata <- reactive({
         req(input$go1)
         if (input$mode == "Custom") {
-            mypath = input$in_genomes$datapath
+            req(input$in_genomes)
+            mypath <- input$in_genomes$datapath
             if (grepl(".vcf", input$in_genomes$name)) {
-                mydata = quiet(mar::vcf_parser(mypath, opengds = TRUE))
-                gdsname = mydata$filename
-                obj = mar:::.seqarray2margeno(mydata)
-                SeqArray::seqClose(mydata)
-                # remove the file after closing the gds file
-                file.remove(gdsname)
+                obj <- safe_parse(quiet(mar::vcf_parser(mypath)), "genotype file")
             } else {
-                obj = mar::text_parser(mypath)
+                obj <- safe_parse(mar::text_parser(mypath), "genotype file")
             }
         } else {
-            obj = mar::gm1001g$geno
+            obj <- mar::gm1001g$geno
         }
         return(obj)
     })
 
     # Build genomaps
     gm <- reactive({
-        mar::genomaps(geno = genodata(),
-                      maps = mapsdata())
+        req(mapsdata(), genodata())
+        safe_parse(
+            mar::genomaps(geno = genodata(), maps = mapsdata()),
+            "uploaded data (sample IDs in the coordinate and genotype files must match and be in the same order)"
+        )
     })
 
     #######################################################################
@@ -112,18 +112,22 @@ function(input, output, session) {
     # TODO: leaflet automatically reprojects, so the raster is not exactly what used
     output$map_genomaps <- leaflet::renderLeaflet({
         # convert gm() to a data frame
-        mapdf = cbind(
+        mapdf <- cbind(
             data.frame(ID = gm()$maps$sample.id),
             as.data.frame(gm()$maps$lonlat)
         )
         leaflet() %>%
             addTiles() %>%
-            addRasterImage(x = gm()$maps$samplemap,
-                           group = "Sample Raster") %>%
-            addCircleMarkers(data = mapdf,
-                             clusterOptions = markerClusterOptions(),
-                             popup = ~ID, label = ~ID, lng = ~LON, lat = ~LAT,
-                             group = "Sample Points") %>%
+            addRasterImage(
+                x = mar:::.get_samplemap(gm()$maps),
+                group = "Sample Raster"
+            ) %>%
+            addCircleMarkers(
+                data = mapdf,
+                clusterOptions = markerClusterOptions(),
+                popup = ~ID, label = ~ID, lng = ~LON, lat = ~LAT,
+                group = "Sample Points"
+            ) %>%
             addLayersControl(
                 overlayGroups = c("Sample Raster", "Sample Points"),
                 options = layersControlOptions(collapsed = FALSE)
@@ -131,257 +135,292 @@ function(input, output, session) {
     })
 
     #########################################################################
-    # Plot site frequency spectrum
-    observeEvent(input$go2, {
-        # Generate SFS and expected SFS
-        sfslist <- reactive({
-            AC <- mar:::.get_AC(gm()$geno)
-            N <- length(gm()$maps$sample.id)
-            genosfs <- mar::sfs(AC = AC, N = N, ploidy = 2, folded = TRUE)
-            neutralsfs <- mar::expsfs(lenAC = length(AC), N = N, ploidy = 2, folded = TRUE)
-            allsfs <- list(genosfs, neutralsfs)
-            names(allsfs) <- c("data", "neutral")
-            return(allsfs)
-        })
+    sfslist <- eventReactive(input$go2, {
+        req(gm())
+        genosfs <- mar::sfs(gm = gm(), folded = FALSE)
+        neutralsfs <- mar::expsfs(gm = gm(), folded = FALSE)
+        allsfs <- list(observed = genosfs, neutral = neutralsfs)
+        return(allsfs)
+    })
 
-        sadlist <- reactive({
-            if (!is.null(input$sad_model)) {
-                marsad <- mar:::MARsad(gm = gm(), sad_models = input$sad_model, folded = TRUE)
-            } else {
-                marsad <- list(AICtabs = NULL, sadsfss = NULL)
-            }
-            return(marsad)
-        })
-
-        # logLik comparisons
-        statdf <- reactive({
-            allsfs <- c(sfslist(), sadlist()$sadsfss)
-            genosfs <- sfslist()$data
-            # compare by logLik
-            ll_list <- sapply(allsfs, function(model) ll_sfs (model = model, data = genosfs))
-            statdf <- data.frame(model = names(allsfs),
-                                 logLik = unname(ll_list),
-                                 stringsAsFactors = FALSE)
-            return(statdf)
-        })
-
-        # outputs
-        output$print_AICtabs <- DT::renderDataTable({
-            if (!is.null(sadlist()$AICtabs)) {
-                DT::datatable(as.data.frame(sadlist()$AICtabs)) %>%
-                    DT::formatRound(., c("logLik","AIC","dLogLik","dAIC"))
-            }
-        })
-
-        output$print_statdf <- DT::renderDataTable({
-            DT::datatable(statdf() %>% dplyr::arrange(desc(logLik))) %>%
-                DT::formatRound(., "logLik")
-        })
-
-        # plot sfs
-        output$plot_sfsdf <- renderPlotly({
-            forplot <- mar:::.sfsl2df(c(sfslist(), sadlist()$sadsfss)) %>%
-                reshape2::melt(id.vars = 'AC',
-                               variable.name = 'model')
-            pp <- ggplot(data = forplot, mapping = aes(x = AC, y = value, fill = model)) +
-                geom_col(position = 'dodge') +
-                labs(x = 'Minor Allele Count', y = 'Number of Alleles')
-            ggplotly(pp)
-        })
+    # plot sfs (bars, density curves, or both)
+    output$plot_sfsdf <- renderPlotly({
+        forplot <- lapply(names(sfslist()), function(model) {
+            sfsvec <- sfslist()[[model]]
+            data.frame(AC = as.numeric(names(sfsvec)), model = model, value = as.numeric(sfsvec))
+        }) %>% dplyr::bind_rows()
+        pp <- ggplot(data = forplot, mapping = aes(x = AC, y = value, fill = model, color = model, group = model))
+        if (input$sfs_plottype %in% c("bar", "both")) {
+            pp <- pp + geom_col(position = "dodge", alpha = if (input$sfs_plottype == "both") 0.5 else 1)
+        }
+        if (input$sfs_plottype %in% c("density", "both")) {
+            pp <- pp + geom_line(linewidth = 1)
+        }
+        if (isTRUE(input$log_sfs_x)) {
+            pp <- pp + scale_x_log10()
+        }
+        if (isTRUE(input$log_sfs_y)) {
+            pp <- pp + scale_y_log10()
+        }
+        pp <- pp + labs(x = "Allele Count", y = "Number of Alleles", fill = "Model", color = "Model")
+        ggplotly(pp)
     })
 
     #######################################################################
-    # Calculate MAR when the button is pressed
-    observeEvent(input$go3, {
-        # Generate MAR data
-        mardf <- reactive({
-            # load data in mar package
-            withProgress(message = 'Calculating MAR ...', {
-                MARsampling(gm = gm(),
-                            scheme = input$scheme,
-                            nrep = input$nrep,
-                            xfrac = 0.01,
-                            quorum = TRUE)
-            })
-        })
-
-        # Build MAR
-        marres <- reactive({
-            mars <- lapply(input$Mtype, function(x) mar::MARcalc(mardf(), Mtype = x, Atype = input$Atype))
-            names(mars) <- input$Mtype
-            marsuml <- lapply(mars, mar:::.marsummary)
-            obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
-            return(obj)
-        })
-
-        # Print MAR results
-        output$print_marres <- DT::renderDataTable({
-            DT::datatable(marres()) %>%
-                DT::formatRound(., c("c", "z", "R2_adj")) %>%
-                DT::formatSignif(., c("c_p", "z_p"))
-        })
-
-        # Option to download mardf()
-        output$download_mardf <- downloadHandler(
-              filename = function() {
-                paste0('mardf_', Sys.Date(), '.csv')
-              },
-              content = function(file) {
-                write.csv(mardf(), file)
-              }
-        )
-
-        # Plot MAR results
-        output$plot_mardf <- renderPlotly({
-            forplot = mardf()[,c(input$Atype, input$Mtype_plot)]
-            forplot = forplot[(forplot[,2] > 0 & !is.na(forplot[,2])), ]
-            c = marres()[rownames(marres()) == input$Mtype_plot,'c']
-            z = marres()[rownames(marres()) == input$Mtype_plot,'z']
-            # make predictions table (since stat_function does not work)
-            preddf <- data.frame(x = sort(unique(forplot[,1]))) %>%
-                dplyr::mutate(y = c * x^z)
-            colnames(preddf) <- colnames(forplot)
-            pp <- ggplot(data = forplot,
-                         mapping = aes(x = .data[[input$Atype]], y = .data[[input$Mtype_plot]])) +
-                geom_point(size = 1, color = 'darkgreen') +
-                geom_line(data = preddf, color = 'darkgray') +
-                labs(x = get_name(Achoices, input$Atype), y = get_name(Mchoices, input$Mtype_plot))
-
-            if (input$log_mar) {
-                pp <- pp +
-                    scale_x_log10() +
-                    scale_y_log10()
-            }
-            ggplotly(pp)
-        })
-
-        # generate an output slider
-        output$slider_mar <- renderUI({
-            sliderInput(inputId = "a_mar",
-                        label = "Sampling box size:",
-                        min = 1,
-                        max = nrow(mardf())/input$nrep,
-                        step = 1,
-                        value = 1,
-                        animate = animationOptions(interval = 1000, loop = FALSE))
-        })
-
-        output$anim_mardf <- renderPlot({
-            req(input$a_mar)
-            # get the extdf
-            bboxlist <- lapply(strsplit(mardf()$extent, ';'), as.integer)
-            idx <- (input$a_mar - 1) * input$nrep + 1
-            par(mar = c(5.1, 4.1, 4.1, 4.1))
-            raster::plot(raster::extent(gm()$maps$samplemap), xlab = 'lon', ylab = 'lat')
-            raster::plot(gm()$maps$samplemap, add = T, legend.mar = 3, legend.args = list(text = '# of genomes', side = 2))
-            for (ii in idx:(idx+input$nrep-1)) {
-                plot(mar:::.rowcol_extent(gm()$maps, bbox = bboxlist[[ii]]), col = 'black', add = T)
-            }
+    # Calculate MAR only when "Calculate MAR/GDAR" is clicked.
+    mardf <- eventReactive(input$go3, {
+        req(gm())
+        withProgress(message = "Calculating MAR ...", {
+            MARsampling(
+                gm = gm(),
+                scheme = input$scheme,
+                nrep = input$nrep,
+                xfrac = 0.01,
+                quorum = TRUE
+            )
         })
     })
 
-    #######################################################################
-    # Run extinction simulations (only if MAR has been calculated)
-    observeEvent(input$go4, {
-        # Generate EXT data
-        extdf <- reactive({
-            # load data in mar package
-            withProgress(message = 'Simulating extinction ...', {
-                MARextinction(gm = gm(),
-                            scheme = input$scheme,
-                            nrep = input$nrep,
-                            xfrac = 0.01)
-            })
-        })
+    # snapshot the settings used for this calculation, so downstream sliders
+    # and animations stay consistent even if the user changes the inputs
+    nrep_mar <- eventReactive(input$go3, input$nrep)
+    mtype_mar <- eventReactive(input$go3, input$Mtype)
+    atype_mar <- eventReactive(input$go3, input$Atype)
 
-        # Build MAR based on EXT data
-        extres <- reactive({
-            mars <- lapply(input$Mtype, function(x) mar::MARcalc(extdf(), Mtype = x, Atype = input$Atype))
-            names(mars) <- input$Mtype
-            marsuml <- lapply(mars, mar:::.marsummary)
-            obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
-            return(obj)
-        })
+    # Build MAR
+    marres <- eventReactive(input$go3, {
+        mars <- lapply(mtype_mar(), function(x) mar::MARcalc(mardf(), Mtype = x, Atype = atype_mar()))
+        names(mars) <- mtype_mar()
+        marsuml <- lapply(mars, mar:::.marsummary)
+        obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
+        rownames(obj) <- mtype_mar()
+        return(obj)
+    })
 
-        # Print MAR results based on EXT data
-        output$print_extres <- DT::renderDataTable({
-            DT::datatable(extres()) %>%
-                DT::formatRound(., c("c", "z", "R2_adj")) %>%
-                DT::formatSignif(., c("c_p", "z_p"))
-        })
+    # Print MAR results (row names and column labels match the plotting panel)
+    output$print_marres <- DT::renderDataTable({
+        df <- marres()
+        rownames(df) <- sapply(rownames(df), function(cd) names(Mchoices)[Mchoices == cd])
+        DT::datatable(df,
+            colnames = c(
+                "Diversity metric" = "model", "c" = "c", "z" = "z",
+                "c p-value" = "c_p", "z p-value" = "z_p", "Adjusted R²" = "R2_adj"
+            )
+        ) %>%
+            DT::formatRound(., c("c", "z", "Adjusted R²")) %>%
+            DT::formatSignif(., c("c p-value", "z p-value"))
+    })
 
-        # Option to download extdf()
-        output$download_extdf <- downloadHandler(
-            filename = function() {
-                paste0('extdf_', Sys.Date(), '.csv')
-            },
-            content = function(file) {
-                write.csv(extdf(), file)
-            }
+    # Option to download mardf()
+    output$download_mardf <- downloadHandler(
+        filename = function() {
+            paste0("mardf_", Sys.Date(), ".csv")
+        },
+        content = function(file) {
+            write.csv(mardf(), file)
+        }
+    )
+
+    # Restrict the plotting metric to whichever metrics were actually calculated
+    output$mtype_plot_mar_ui <- renderUI({
+        req(marres())
+        choices <- Mchoices[Mchoices %in% mtype_mar()]
+        selectInput("Mtype_plot_mar", "Select the genetic diversity metric to plot:",
+            choices = choices, selected = choices[1]
         )
+    })
 
-        # Plot EXT results (% lost vs % lost)
-        output$plot_extdf <- renderPlotly({
-            forplot = extdf()[,c(input$Atype, input$Mtype_plot, 'repid')] %>% na.omit()
-            # generate percentages data
-            forplot[,1] <- 1 - forplot[,1]/max(forplot[,1])
-            forplot[,2] <- forplot[,2]/max(forplot[,2])
-            # get c and z again from EXT output
-            z = extres()[rownames(extres()) == input$Mtype_plot,'z']
-            # make predictions table (since stat_function does not work)
-            preddf <- data.frame(x = sort(unique(forplot[,1]))) %>%
-                dplyr::mutate(y = (1-x)^z)
-            colnames(preddf) <- colnames(forplot)[1:2]
-            pp <- ggplot(data = forplot,
-                         mapping = aes(x = .data[[input$Atype]], y = .data[[input$Mtype_plot]], color = .data[['repid']])) +
-                geom_point(size = 1) +
-                geom_line(data = preddf, color = 'darkgray') +
-                scale_color_gradient(low = "lightgreen", high = "darkgreen") +
-                scale_x_continuous(labels = scales::percent) +
-                scale_y_continuous(labels = scales::percent) +
-                labs(x = paste0("% of ", get_name(Achoices, input$Atype), " lost"),
-                     y = paste0("% of ", get_name(Mchoices, input$Mtype_plot), " remained")) +
-                theme(legend.position = 'none')
-            ggplotly(pp)
-        })
+    # Plot MAR results
+    output$plot_mardf <- renderPlotly({
+        req(input$Mtype_plot_mar)
+        forplot <- mardf()[, c(atype_mar(), input$Mtype_plot_mar)]
+        forplot <- forplot[(forplot[, 2] > 0 & !is.na(forplot[, 2])), ]
+        c <- marres()[rownames(marres()) == input$Mtype_plot_mar, "c"]
+        z <- marres()[rownames(marres()) == input$Mtype_plot_mar, "z"]
+        # make predictions table (since stat_function does not work)
+        preddf <- data.frame(x = sort(unique(forplot[, 1]))) %>%
+            dplyr::mutate(y = c * x^z)
+        colnames(preddf) <- colnames(forplot)
+        pp <- ggplot(
+            data = forplot,
+            mapping = aes(x = .data[[atype_mar()]], y = .data[[input$Mtype_plot_mar]])
+        ) +
+            geom_point(size = 1, color = "darkgreen") +
+            geom_line(data = preddf, color = "darkgray") +
+            labs(x = get_name(Achoices, atype_mar()), y = get_name(Mchoices, input$Mtype_plot_mar))
 
-        # generate an output slider for extinction visualizations
-        output$select_ext <- renderUI({
-            numericInput(inputId = 'repid_ext', label = 'Select which simulations to animate:',
-                         value = 1, min = 1, max = input$nrep, step = 1)
-        })
-        output$slider_ext <- renderUI({
-            sliderInput(inputId = "a_ext",
-                        label = "Extinction step:",
-                        min = 1,
-                        max = nrow(extdf())/input$nrep,
-                        step = 1,
-                        value = 1,
-                        animate = animationOptions(interval = 1000, loop = FALSE))
-        })
+        if (input$log_mar) {
+            pp <- pp +
+                scale_x_log10() +
+                scale_y_log10()
+        }
+        ggplotly(pp)
+    })
 
-        output$anim_extdf <- renderPlot({
-            req(input$a_ext)
-            # get the given extdf()
-            extdf0 <- extdf()[extdf()$repid == input$repid_ext, ]
-            extl <- lapply(strsplit(extdf0$extl, ';'), as.integer)
-            rr <- gm()$maps$samplemap; values(rr) <- NA
-            par(mar = c(5.1, 4.1, 4.1, 4.1))
-            raster::plot(raster::extent(gm()$maps$samplemap), xlab = 'lon', ylab = 'lat')
-            raster::plot(gm()$maps$samplemap, add = T, legend.mar = 3, legend.args = list(text = '# of genomes', side = 2))
-            rr[setdiff(gm()$maps$cellid, extl[[input$a_ext]])] <- 1
-            raster::plot(rr, add = T, col = 'black', legend = FALSE)
+    # generate an output slider
+    output$slider_mar <- renderUI({
+        req(mardf())
+        sliderInput(
+            inputId = "a_mar",
+            label = "Sampling box size:",
+            min = 1,
+            max = nrow(mardf()) / nrep_mar(),
+            step = 1,
+            value = 1,
+            animate = animationOptions(interval = 1000, loop = FALSE)
+        )
+    })
+
+    output$anim_mardf <- renderPlot({
+        req(input$a_mar, mardf())
+        # get the extdf
+        bboxlist <- lapply(strsplit(mardf()$extent, ";"), as.integer)
+        idx <- (input$a_mar - 1) * nrep_mar() + 1
+        sm <- mar:::.get_samplemap(gm()$maps)
+        par(mar = c(5.1, 4.1, 4.1, 4.1))
+        terra::plot(terra::ext(sm), xlab = "lon", ylab = "lat")
+        terra::plot(sm, add = T, col = SAMPLEMAP_PAL, legend.mar = 3, legend.args = list(text = "# of genomes", side = 2))
+        for (ii in idx:(idx + nrep_mar() - 1)) {
+            terra::plot(rowcol_to_extent(sm, bboxlist[[ii]]),
+                col = NA, border = "black", lwd = 2, add = T
+            )
+        }
+    })
+
+    #######################################################################
+    # Run extinction simulations only when "Simulate extinction" is clicked.
+    extdf <- eventReactive(input$go4, {
+        req(gm())
+        withProgress(message = "Simulating extinction ...", {
+            MARextinction(
+                gm = gm(),
+                scheme = input$scheme_ext,
+                nrep = input$nrep_ext,
+                xfrac = 0.01
+            )
         })
+    })
+
+    nrep_ext <- eventReactive(input$go4, input$nrep_ext)
+    mtype_ext <- eventReactive(input$go4, input$Mtype_ext)
+    atype_ext <- eventReactive(input$go4, input$Atype_ext)
+
+    # Build MAR based on EXT data
+    extres <- eventReactive(input$go4, {
+        mars <- lapply(mtype_ext(), function(x) mar::MARcalc(extdf(), Mtype = x, Atype = atype_ext()))
+        names(mars) <- mtype_ext()
+        marsuml <- lapply(mars, mar:::.marsummary)
+        obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
+        rownames(obj) <- mtype_ext()
+        return(obj)
+    })
+
+    # Print MAR results based on EXT data
+    output$print_extres <- DT::renderDataTable({
+        df <- extres()
+        rownames(df) <- sapply(rownames(df), function(cd) names(Mchoices)[Mchoices == cd])
+        DT::datatable(df,
+            colnames = c(
+                "Diversity metric" = "model", "c" = "c", "z" = "z",
+                "c p-value" = "c_p", "z p-value" = "z_p", "Adjusted R²" = "R2_adj"
+            )
+        ) %>%
+            DT::formatRound(., c("c", "z", "Adjusted R²")) %>%
+            DT::formatSignif(., c("c p-value", "z p-value"))
+    })
+
+    # Option to download extdf()
+    output$download_extdf <- downloadHandler(
+        filename = function() {
+            paste0("extdf_", Sys.Date(), ".csv")
+        },
+        content = function(file) {
+            write.csv(extdf(), file)
+        }
+    )
+
+
+    output$mtype_plot_ext_ui <- renderUI({
+        req(extres())
+        choices <- Mchoices[Mchoices %in% mtype_ext()]
+        selectInput("Mtype_plot_ext", "Select the genetic diversity metric to plot:",
+            choices = choices, selected = choices[1]
+        )
+    })
+
+    # Plot EXT results (% lost vs % lost)
+    output$plot_extdf <- renderPlotly({
+        req(input$Mtype_plot_ext)
+        forplot <- extdf()[, c(atype_ext(), input$Mtype_plot_ext, "repid")] %>% na.omit()
+        # generate percentages data
+        forplot[, 1] <- 1 - forplot[, 1] / max(forplot[, 1])
+        forplot[, 2] <- forplot[, 2] / max(forplot[, 2])
+        # get c and z again from EXT output
+        z <- extres()[rownames(extres()) == input$Mtype_plot_ext, "z"]
+        # make predictions table (since stat_function does not work)
+        preddf <- data.frame(x = sort(unique(forplot[, 1]))) %>%
+            dplyr::mutate(y = (1 - x)^z)
+        colnames(preddf) <- colnames(forplot)[1:2]
+        pp <- ggplot(
+            data = forplot,
+            mapping = aes(x = .data[[atype_ext()]], y = .data[[input$Mtype_plot_ext]], color = .data[["repid"]])
+        ) +
+            geom_point(size = 1) +
+            geom_line(data = preddf, color = "darkgray") +
+            scale_color_gradient(low = "lightgreen", high = "darkgreen") +
+            scale_x_continuous(labels = scales::percent) +
+            scale_y_continuous(labels = scales::percent) +
+            labs(
+                x = paste0("% of ", get_name(Achoices, atype_ext()), " lost"),
+                y = paste0("% of ", get_name(Mchoices, input$Mtype_plot_ext), " remained")
+            ) +
+            theme(legend.position = "none")
+        ggplotly(pp)
+    })
+
+    # generate an output slider for extinction visualizations
+    output$select_ext <- renderUI({
+        req(extdf())
+        numericInput(
+            inputId = "repid_ext", label = "Select which simulations to animate:",
+            value = 1, min = 1, max = nrep_ext(), step = 1
+        )
+    })
+    output$slider_ext <- renderUI({
+        req(extdf())
+        sliderInput(
+            inputId = "a_ext",
+            label = "Extinction step:",
+            min = 1,
+            max = nrow(extdf()) / nrep_ext(),
+            step = 1,
+            value = 1,
+            animate = animationOptions(interval = 1000, loop = FALSE)
+        )
+    })
+
+    output$anim_extdf <- renderPlot({
+        req(input$a_ext, input$repid_ext, extdf())
+        # get the given extdf()
+        extdf0 <- extdf()[extdf()$repid == input$repid_ext, ]
+        extl <- lapply(strsplit(extdf0$extl, ";"), as.integer)
+        sm <- mar:::.get_samplemap(gm()$maps)
+        rr <- sm
+        terra::values(rr) <- NA
+        par(mar = c(5.1, 4.1, 4.1, 4.1))
+        terra::plot(terra::ext(sm), xlab = "lon", ylab = "lat")
+        terra::plot(sm, add = T, col = SAMPLEMAP_PAL, legend.mar = 3, legend.args = list(text = "# of genomes", side = 2))
+        rr[setdiff(gm()$maps$cellid, extl[[input$a_ext]])] <- 1
+        terra::plot(rr, add = T, col = "black", legend = FALSE)
     })
 
     session$onSessionEnded(function() {
-        tempfiles = c(list.files(pattern = "^mardf"), list.files(pattern = "^extdf"), list.files(pattern = 'report.html'),
-                      list.files(pattern = '^Report.+html$'))
+        tempfiles <- c(
+            list.files(pattern = "^mardf"), list.files(pattern = "^extdf"), list.files(pattern = "report.html"),
+            list.files(pattern = "^Report.+html$")
+        )
         if (length(tempfiles) > 0) {
             sapply(tempfiles, unlink)
         }
     })
 }
-
-
-
