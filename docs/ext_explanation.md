@@ -11,4 +11,4 @@ To simulate these scenarios, the marApp applies a spatial extinction modeling pr
 
 The sampling design, area calculation, and genetic diversity metrics can be specified independently on this tab.
 
-**Reading the summary table:** each row is a fitted power-law model for one genetic diversity metric, following the same $M/GD = cA^z$ form as the "Mutations-area relationship" tab. `c` and `z` are the fitted power-law coefficient and scaling exponent; `c_p` and `z_p` are the _p_-values testing whether `c` and `z`, respectively, are significantly different from zero; `R2_adj` is the adjusted R² of the fit.
+**Reading the summary table:** each row is a fitted power-law model for one genetic diversity metric, following the same $M/GD = cA^z$ form as the "Mutations-area relationship" tab. `c` and `z` are the fitted power-law coefficient and scaling exponent; `c p-value` and `z p-value` are the _p_-values testing whether `c` and `z`, respectively, are significantly different from zero; `Adjusted R²` is the adjusted R² of the fit.

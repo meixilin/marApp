@@ -29,4 +29,4 @@ For genetic diversity sampling, we offer four different genetic diversity statis
 3. Watterson's theta ($\theta_w$)
 4. Nucleotide diversity ($\theta_\pi$)
 
-**Reading the summary table:** each row is a fitted power-law model $M/GD = cA^z$ for one genetic diversity metric. `c` and `z` are the fitted power-law coefficient and scaling exponent; `c_p` and `z_p` are the _p_-values testing whether `c` and `z`, respectively, are significantly different from zero; `R2_adj` is the adjusted R² of the fit.
+**Reading the summary table:** each row is a fitted power-law model $M/GD = cA^z$ for one genetic diversity metric. `c` and `z` are the fitted power-law coefficient and scaling exponent; `c p-value` and `z p-value` are the _p_-values testing whether `c` and `z`, respectively, are significantly different from zero; `Adjusted R²` is the adjusted R² of the fit.
