@@ -24,7 +24,7 @@ $$
 
 where:
 
-- $M$ is the genetic diversity measured as the number of segregating mutations,
+- $M$ is the genetic diversity measured as the number of mutations,
 
 - $A$ is the area sampled for genetic data,
 

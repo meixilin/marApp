@@ -9,25 +9,23 @@ library(plotly)
 
 library(ggplot2)
 library(dplyr)
-library(reshape2)
 
-# library(sads)
-library(SeqArray)
-library(sf)
 library(terra)
 library(mar)
 
 sidewidth <- 300
-mycrs <- "+proj=longlat +datum=WGS84"
+smallcrs <- "EPSG:4326" # WGS84 longitude/latitude
+largecrs <- "EPSG:8857" # Equal Earth Greenwich
+spanmax <- 10 # degrees
 
 mode0_choices <- c("estimate loss", "build goals")
 con_reports <- c("report_loss.Rmd", "report_goal.Rmd")
 names(con_reports) <- mode0_choices
 
 Mchoices <- mar:::.Mtype
-names(Mchoices) <- c("Segregating sites", "Endemic segregating sites", "Watterson's theta", "Nucleotide diversity")
+names(Mchoices) <- c("Number of mutations", "Number of endemic mutations", "Watterson's theta", "Nucleotide diversity")
 Achoices <- mar:::.Atype
-names(Achoices) <- c("Area of cells (km^2)", "Area of squares (degree^2)", "Number of individuals sampled")
+names(Achoices) <- c("Area of cells (km^2)", "Area of squares (km^2)", "Number of individuals sampled")
 Achoices_ext <- Achoices[c("Area of cells (km^2)", "Number of individuals sampled")]
 
 options(shiny.maxRequestSize = 30 * 1024^2) # maximum 30 MB upload
@@ -65,19 +63,29 @@ safe_parse <- function(expr, filelabel) {
     return(result)
 }
 
-SAMPLEMAP_PAL <- rev(grDevices::terrain.colors(255))
+# read a coordinate file, picking the map projection from how far the samples
+# spread. Uploaded coordinates are degrees (EPSG:4326), so the span is read
+# straight off the file before any map is built, and the equal-area projection is
+# used only when the samples spread widely enough for the degree grid to distort
+# area.
+lonlat_parser_autocrs <- function(lonlat.fn) {
+    lonlatdf <- mar:::.read_lonlat(lonlat.fn)
+    spans <- apply(as.matrix(lonlatdf[, 2:3]), 2, function(xx) diff(range(xx)))
+    mapcrs <- if (any(spans > spanmax)) largecrs else smallcrs
+    mar::lonlat_parser(lonlat.fn, mapres = NULL, mapcrs = mapcrs)
+}
 
-
-rowcol_to_extent <- function(samplemap, bbox) {
-    stopifnot(length(bbox) == 4)
-    rr <- if (inherits(samplemap, "Raster")) terra::rast(samplemap) else samplemap
-    e <- as.vector(terra::ext(rr)) # xmin, xmax, ymin, ymax
-    xres <- terra::xres(rr)
-    yres <- terra::yres(rr)
-    terra::ext(unname(c(
-        e["xmin"] + (bbox[3] - 1) * xres, # xmin from first column
-        e["xmin"] + bbox[4] * xres, # xmax from last column
-        e["ymax"] - bbox[2] * yres, # ymin from last row (rows count from north)
-        e["ymax"] - (bbox[1] - 1) * yres # ymax from first row
-    )))
+# marmaps stores coordinates in the map CRS (e.g. EPSG:8857 for gm1001g), but
+# leaflet markers must be given longitude/latitude degrees. Reproject onto
+# EPSG:4326 using the CRS carried by the samplemap raster. Returns NULL when the
+# coordinates sit on an arbitrary plane (empty CRS), so callers can skip markers.
+marmaps_lonlat_wgs84 <- function(maps) {
+    samplemap <- mar:::.get_samplemap(maps) # force before S4 dispatch below
+    mapcrs <- terra::crs(samplemap)
+    if (is.na(mapcrs) || !nzchar(mapcrs)) {
+        return(NULL)
+    }
+    pts <- terra::vect(maps$lonlat, type = "points", crs = mapcrs)
+    xy <- terra::geom(terra::project(pts, "EPSG:4326"))[, c("x", "y"), drop = FALSE]
+    data.frame(ID = maps$sample.id, LON = xy[, "x"], LAT = xy[, "y"])
 }

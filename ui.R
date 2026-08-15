@@ -159,7 +159,7 @@ body <- dashboardBody(
                         inputId = "Atype",
                         label = "Select the area metrics: ",
                         choices = Achoices,
-                        selected = "Asq"
+                        selected = "A"
                     ),
                     numericInput(
                         inputId = "nrep",
@@ -284,8 +284,8 @@ tagList(
         body = body,
         skin = "green"
     ),
-    tags$footer(
-        "© 2024 MOI LAB. Developed by Meixi Lin.",
-        style = "width:300px; padding:10px; background-color: #222D32; color: white"
-    )
+    # tags$footer(
+    #     "© 2026 MOI LAB. Developed by Meixi Lin.",
+    #     style = "width:300px; padding:10px; background-color: #222D32; color: white"
+    # )
 )

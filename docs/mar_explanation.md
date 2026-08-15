@@ -1,5 +1,5 @@
 The **mutations-area relationship (MAR)** and **genetic-diversity-area relationship (GDAR)** describe the scaling relationships between genetic diversity and area, providing theoretical foundations for genetic diversity estimates and predictions in conservation.
-Researchers have discovered that genetic diversity, either measured as the number of segregating sites $M$, or the nucleotide diversity ($\theta_\pi$ or $GD$), increases with the area surveyed ($A$).
+Researchers have discovered that genetic diversity, either measured as the number of mutations $M$, or the nucleotide diversity ($\theta_\pi$ or $GD$), increases with the area surveyed ($A$).
 This scaling relationship emerges from the principle of "commonness of rarity" - demonstrated in the tab "Site-frequency spectrum".
 Analogous to the **species-area relationship (SAR)**, the shape of the MAR/GDAR often follows a power-law function:
 
@@ -19,13 +19,13 @@ Users can choose from five sampling designs:
 
 Area can be quantified via two methods:
 
-1. total square area (Asq, degree^2)
+1. total square area (Asq, km^2)
 2. occupied grid-cell area (A, km^2)
 
 For genetic diversity sampling, we offer four different genetic diversity statistics:
 
-1. Number of segregating sites ($M$)
-2. Endemic segregating sites ($E$)
+1. Number of mutations ($M$)
+2. Number of endemic mutations ($E$)
 3. Watterson's theta ($\theta_w$)
 4. Nucleotide diversity ($\theta_\pi$)
 
