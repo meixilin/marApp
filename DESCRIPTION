@@ -1,6 +1,6 @@
 Package: marApp
 Title: ShinyApp for Mutations-Area Relationship
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R: 
     person("Meixi", "Lin", , "", role = "aut")
 Description: ShinyApp for Mutations-Area Relationship. 
