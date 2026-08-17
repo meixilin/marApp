@@ -46,12 +46,12 @@ function(input, output, session) {
                 fileInput(
                     inputId = "in_coords",
                     label = "Coordinate file",
-                    accept = c(".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz")
+                    accept = c(".txt", ".csv", ".tsv", ".gz")
                 ),
                 fileInput(
                     inputId = "in_genomes",
                     label = "Genotype file",
-                    accept = c(".txt", ".txt.gz", ".tsv", ".tsv.gz", ".vcf", ".vcf.gz")
+                    accept = c(".txt", ".csv", ".tsv", ".vcf", ".gz")
                 )
             )
         }
@@ -78,6 +78,7 @@ function(input, output, session) {
         if (input$mode == "Custom") {
             req(input$in_genomes)
             mypath <- input$in_genomes$datapath
+            print(mypath)
             if (grepl(".vcf", input$in_genomes$name)) {
                 obj <- safe_parse(quiet(mar::vcf_parser(mypath)), "genotype file")
             } else {
