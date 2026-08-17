@@ -78,7 +78,6 @@ function(input, output, session) {
         if (input$mode == "Custom") {
             req(input$in_genomes)
             mypath <- input$in_genomes$datapath
-            print(mypath)
             if (grepl(".vcf", input$in_genomes$name)) {
                 obj <- safe_parse(quiet(mar::vcf_parser(mypath)), "genotype file")
             } else {
