@@ -39,12 +39,12 @@ function(input, output, session) {
                 fileInput(
                     inputId = "in_coords",
                     label = "Coordinate file",
-                    accept = c(".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz")
+                    accept = c(".txt", ".csv", ".tsv", ".gz")
                 ),
                 fileInput(
                     inputId = "in_genomes",
                     label = "Genotype file",
-                    accept = c(".txt", ".txt.gz", ".tsv", ".tsv.gz", ".vcf", ".vcf.gz")
+                    accept = c(".txt", ".csv", ".tsv", ".vcf", ".gz")
                 )
             )
         }
@@ -59,7 +59,7 @@ function(input, output, session) {
         if (input$mode == "Custom") {
             req(input$in_coords)
             mypath <- input$in_coords$datapath
-            obj <- safe_parse(mar::lonlat_parser(mypath, mapres = NULL, mapcrs = mycrs), "coordinate file")
+            obj <- safe_parse(lonlat_parser_autocrs(mypath), "coordinate file")
         } else {
             obj <- mar::gm1001g$maps
         }
@@ -91,6 +91,18 @@ function(input, output, session) {
         )
     })
 
+    # loading data returns the analysis buttons to their unclicked state, which
+    # clears every result computed on the previous dataset
+    go <- reactiveValues()
+    observeEvent(gm(), {
+        go$sfs <- NULL
+        go$mar <- NULL
+        go$ext <- NULL
+    })
+    observeEvent(input$go2, go$sfs <- input$go2)
+    observeEvent(input$go3, go$mar <- input$go3)
+    observeEvent(input$go4, go$ext <- input$go4)
+
     #######################################################################
     # Print data
     output$print_mapsdata <- renderPrint({
@@ -104,23 +116,26 @@ function(input, output, session) {
     # Plot leaflet
     # TODO: leaflet automatically reprojects, so the raster is not exactly what used
     output$map_genomaps <- leaflet::renderLeaflet({
-        # convert gm() to a data frame
-        mapdf <- cbind(
-            data.frame(ID = gm()$maps$sample.id),
-            as.data.frame(gm()$maps$lonlat)
-        )
-        leaflet() %>%
+        maps <- gm()$maps
+        # coordinates are stored in the map CRS, so reproject onto lon/lat degrees
+        # before handing them to leaflet
+        mapdf <- marmaps_lonlat_wgs84(maps)
+        map <- leaflet() %>%
             addTiles() %>%
             addRasterImage(
-                x = mar:::.get_samplemap(gm()$maps),
+                x = mar:::.get_samplemap(maps),
                 group = "Sample Raster"
-            ) %>%
-            addCircleMarkers(
-                data = mapdf,
-                clusterOptions = markerClusterOptions(),
-                popup = ~ID, label = ~ID, lng = ~LON, lat = ~LAT,
-                group = "Sample Points"
-            ) %>%
+            )
+        if (!is.null(mapdf)) {
+            map <- map %>%
+                addCircleMarkers(
+                    data = mapdf,
+                    clusterOptions = markerClusterOptions(),
+                    popup = ~ID, label = ~ID, lng = ~LON, lat = ~LAT,
+                    group = "Sample Points"
+                )
+        }
+        map %>%
             addLayersControl(
                 overlayGroups = c("Sample Raster", "Sample Points"),
                 options = layersControlOptions(collapsed = FALSE)
@@ -128,7 +143,7 @@ function(input, output, session) {
     })
 
     #########################################################################
-    sfslist <- eventReactive(input$go2, {
+    sfslist <- eventReactive(go$sfs, {
         req(gm())
         genosfs <- mar::sfs(gm = gm(), folded = FALSE)
         neutralsfs <- mar::expsfs(gm = gm(), folded = FALSE)
@@ -172,7 +187,7 @@ function(input, output, session) {
     # Calculate MAR only when "Calculate MAR/GDAR" is clicked.
     seed_mar <- eventReactive(input$go3, resolve_seed(input$seed))
 
-    mardf <- eventReactive(input$go3, {
+    mardf <- eventReactive(go$mar, {
         req(gm())
         withProgress(message = "Calculating MAR ...", {
             MARsampling(
@@ -198,7 +213,7 @@ function(input, output, session) {
     atype_mar <- eventReactive(input$go3, input$Atype)
 
     # Build MAR
-    marres <- eventReactive(input$go3, {
+    marres <- eventReactive(go$mar, {
         mar_fit_table(mardf(), mtype_mar(), atype_mar())
     })
 
@@ -269,16 +284,19 @@ function(input, output, session) {
 
     output$anim_mardf <- renderPlot({
         req(input$a_mar, mardf())
-        # get the extdf
-        bboxlist <- lapply(strsplit(mardf()$extent, ";"), as.integer)
+        # MARsampling marks the reverse selections of the `inwards` scheme by
+        # prefixing the extent with "-", so strip that before reading the four
+        # row/column indices, otherwise the leading index is parsed as negative
+        bboxlist <- lapply(strsplit(sub("^-", "", mardf()$extent), ";"), as.integer)
         idx <- (input$a_mar - 1) * nrep_mar() + 1
         sm <- mar:::.get_samplemap(gm()$maps)
         par(mar = c(5.1, 4.1, 4.1, 4.1))
-        terra::plot(terra::ext(sm), xlab = "lon", ylab = "lat")
-        terra::plot(sm, add = T, col = SAMPLEMAP_PAL, legend.mar = 3, legend.args = list(text = "# of genomes", side = 2))
+        # same base map and box outlines as mar:::.animate_MARsampling
+        plot(gm()$maps)
         for (ii in idx:(idx + nrep_mar() - 1)) {
-            terra::plot(rowcol_to_extent(sm, bboxlist[[ii]]),
-                col = NA, border = "black", lwd = 2, add = T
+            bbox <- bboxlist[[ii]]
+            terra::plot(terra::ext(sm[bbox[1:2], bbox[3:4], drop = FALSE]),
+                add = TRUE, legend = FALSE
             )
         }
     })
@@ -287,7 +305,7 @@ function(input, output, session) {
     # Run extinction simulations only when "Simulate extinction" is clicked.
     seed_ext <- eventReactive(input$go4, resolve_seed(input$seed_ext))
 
-    extdf <- eventReactive(input$go4, {
+    extdf <- eventReactive(go$ext, {
         req(gm())
         withProgress(message = "Simulating extinction ...", {
             MARextinction(
@@ -310,7 +328,7 @@ function(input, output, session) {
     atype_ext <- eventReactive(input$go4, input$Atype_ext)
 
     # Build MAR based on EXT data
-    extres <- eventReactive(input$go4, {
+    extres <- eventReactive(go$ext, {
         mar_fit_table(extdf(), mtype_ext(), atype_ext())
     })
 
@@ -398,9 +416,12 @@ function(input, output, session) {
         rr <- sm
         terra::values(rr) <- NA
         par(mar = c(5.1, 4.1, 4.1, 4.1))
-        terra::plot(terra::ext(sm), xlab = "lon", ylab = "lat")
-        terra::plot(sm, add = T, col = SAMPLEMAP_PAL, legend.mar = 3, legend.args = list(text = "# of genomes", side = 2))
+        # same base map and extinct-cell overlay as mar:::.animate_MARextinction.
+        # that function accumulates into one raster as it loops; here rr is rebuilt
+        # for the step the slider selects, which gives the same cells because the
+        # extinct set only ever grows
+        plot(gm()$maps)
         rr[setdiff(gm()$maps$cellid, extl[[input$a_ext]])] <- 1
-        terra::plot(rr, add = T, col = "black", legend = FALSE)
+        terra::plot(rr, add = TRUE, col = "black", legend = FALSE)
     })
 }

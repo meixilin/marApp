@@ -1,4 +1,4 @@
-The **mutations-area relationship (MAR)** describes how genetic diversity, measured as the number of segregating sites $M$, scales with the geographic area sampled. It typically follows a power-law form of $M = cA^z$.
+The **mutations-area relationship (MAR)** describes how genetic diversity, measured as the number of mutations $M$, scales with the geographic area sampled. It typically follows a power-law form of $M = cA^z$.
 
 This relationship arises from a core principle: the _commonness of rarity_. Most mutations in a population are rare, and only a few reach high frequencies. Take a genetic dataset of $N$ individuals with ploidy $x$, so there are $xN$ chromosomes genotyped at $L$ biallelic sites. At each site, count how many of the $xN$ chromosomes carry the mutation and call that count $k$. The **site frequency spectrum (SFS)** tallies how many sites have $k = 1$ (singletons), how many have $k = 2$, and so on; written as a proportion of sites, $\sigma(k)$, it sums to one across all $k$.
 

@@ -3,6 +3,7 @@
 .Rbuildignore
 .Rhistory
 .lintr
+.claude
 marApp.Rproj
 
 # FOLDERS
