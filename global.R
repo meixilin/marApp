@@ -12,7 +12,6 @@ library(dplyr)
 library(reshape2)
 
 # library(sads)
-library(SeqArray)
 library(sf)
 library(terra)
 library(mar)
@@ -21,8 +20,6 @@ sidewidth <- 300
 mycrs <- "+proj=longlat +datum=WGS84"
 
 mode0_choices <- c("estimate loss", "build goals")
-con_reports <- c("report_loss.Rmd", "report_goal.Rmd")
-names(con_reports) <- mode0_choices
 
 Mchoices <- mar:::.Mtype
 names(Mchoices) <- c("Segregating sites", "Endemic segregating sites", "Watterson's theta", "Nucleotide diversity")
@@ -80,4 +77,190 @@ rowcol_to_extent <- function(samplemap, bbox) {
         e["ymax"] - bbox[2] * yres, # ymin from last row (rows count from north)
         e["ymax"] - (bbox[1] - 1) * yres # ymax from first row
     )))
+}
+
+#######################################################################
+# Conservation estimator
+# The report is built from regular shiny tags so nothing is written to disk
+# while the app runs; a standalone HTML copy is only produced when the user
+# clicks "Download report".
+
+# Solve M = (1 - A)^z for the unknown given the chosen mode.
+# A: proportion of habitat lost; M: proportion of genetic diversity retained.
+con_estimate <- function(mode, z, aloss, gtarg) {
+    if (mode == "estimate loss") {
+        Atar <- aloss
+        Mtar <- (1 - Atar)^z
+    } else {
+        Mtar <- gtarg
+        Atar <- 1 - Mtar^(1 / z)
+    }
+    list(mode = mode, z = z, aloss = aloss, gtarg = gtarg, Atar = Atar, Mtar = Mtar)
+}
+
+con_plot <- function(est) {
+    preddf <- data.frame(A = seq(0, 1, by = 0.005))
+    preddf$M <- (1 - preddf$A)^est$z
+    forplot <- data.frame(A = est$Atar, M = est$Mtar)
+    ggplot(data = forplot, aes(x = A, y = M)) +
+        geom_line(data = preddf, color = "lightgreen") +
+        geom_point(size = 3, color = "darkblue") +
+        geom_segment(aes(x = A, xend = A, y = 0, yend = M), linetype = "dashed", color = "lightgray") +
+        geom_segment(aes(x = 0, xend = A, y = M, yend = M), linetype = "dashed", color = "lightgray") +
+        annotate("text", x = est$Atar, y = 0, label = scales::percent(est$Atar), vjust = 1.5, size = 3.5) +
+        annotate("text", x = 0, y = est$Mtar, label = scales::percent(est$Mtar), hjust = -0.2, size = 3.5) +
+        scale_x_continuous(labels = scales::percent) +
+        scale_y_continuous(labels = scales::percent) +
+        labs(x = "% of Area lost", y = "% of Segregating sites remained")
+}
+
+# Report body as shiny tags. `plot` is the tag that shows the figure: a
+# plotOutput() in the app, an <img> in the downloaded file.
+con_report_tags <- function(est, plot) {
+    pct <- scales::percent
+    b <- function(x) strong(x, .noWS = "outside")
+    isloss <- est$mode == "estimate loss"
+    tagList(
+        h3(if (isloss) "Genetic diversity loss based on MAR" else "Habitat conservation goal based on MAR"),
+        h4("Overview"),
+        p(
+            "This report summarizes predictions based on the ", b("mutations-area relationship (MAR)"),
+            ", which describes how genetic diversity scales with geographic area. The MAR follows a power law:"
+        ),
+        p("$$M = cA^z$$"),
+        p("where:"),
+        tags$ul(
+            tags$li("\\(M\\) is the genetic diversity measured as the number of segregating mutations,"),
+            tags$li("\\(A\\) is the area sampled for genetic data,"),
+            tags$li("\\(z\\) is the scaling exponent, influenced by population structure, demographic history, and species biological traits.")
+        ),
+        p(if (isloss) {
+            "This can be rearranged to estimate the genetic diversity retained given habitat loss:"
+        } else {
+            "This can be rearranged to estimate habitat conservation goals given genetic diversity goals:"
+        }),
+        p(if (isloss) {
+            "$$\\text{Proportion of genetic diversity retained} = (1 - \\text{Proportion of habitat lost})^z$$"
+        } else {
+            "$$\\text{Proportion of genetic diversity to preserve} = (1 - \\text{Maximum proportion of habitat lost})^z$$"
+        }),
+        h4("User input"),
+        tags$ul(
+            tags$li(b("Mode: "), est$mode),
+            tags$li(b("Population structure (z): "), est$z),
+            if (isloss) {
+                tags$li(b("Percentage of habitat already lost: "), pct(est$aloss))
+            } else {
+                tags$li(b("Percentage of genetic diversity to preserve: "), pct(est$gtarg))
+            }
+        ),
+        h4(if (isloss) "Estimate genetic diversity loss" else "Build habitat protection goals"),
+        plot,
+        h4("Interpretation"),
+        if (isloss) {
+            p(
+                "Given the current loss of ", b(pct(est$Atar)), " of habitat, and a MAR scaling factor z of ",
+                b(est$z), ", approximately ", b(pct(est$Mtar)), " of genetic diversity is still intact, and ",
+                b(pct(1 - est$Mtar)), " of genetic diversity is already lost."
+            )
+        } else {
+            p(
+                "To preserve at least ", b(pct(est$Mtar)), " of genetic diversity intact, at most ",
+                b(pct(est$Atar)), " of habitat can be lost, and at least ", b(pct(1 - est$Atar)),
+                " of habitat needs to be protected, given a MAR scaling factor z of ", b(est$z), "."
+            )
+        },
+        p(
+            "Genetic diversity is measured as allelic richness in this report. ",
+            "Higher population structure (higher z) results in faster genetic diversity loss with habitat loss. ",
+            "To retain more genetic diversity, more area must be protected."
+        )
+    )
+}
+
+# Write a standalone HTML report to `file` (the temp path from downloadHandler).
+con_report_save <- function(est, file) {
+    png <- tempfile(fileext = ".png")
+    on.exit(unlink(png))
+    ggsave(png, con_plot(est), width = 7, height = 5, dpi = 120)
+    img <- tags$img(src = base64enc::dataURI(file = png, mime = "image/png"), style = "max-width:100%;")
+    page <- tagList(
+        tags$head(
+            tags$title("MAR conservation report"),
+            tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML")
+        ),
+        div(
+            style = "font-family: sans-serif; max-width: 800px; margin: 2em auto; padding: 0 1em;",
+            con_report_tags(est, img)
+        )
+    )
+    htmltools::save_html(page, file)
+}
+
+#######################################################################
+# MAR fits with 95% confidence intervals
+
+# Summarize one sars::sar_power() fit: estimates, 95% CIs, p-values, adj. R2.
+# Returns a row of NAs if the fit failed (MARcalc returns NULL).
+mar_fit_summary <- function(mar) {
+    out <- data.frame(
+        model = NA_character_, c = NA_real_, c_lo = NA_real_, c_hi = NA_real_,
+        z = NA_real_, z_lo = NA_real_, z_hi = NA_real_,
+        c_p = NA_real_, z_p = NA_real_, R2_adj = NA_real_,
+        stringsAsFactors = FALSE
+    )
+    tryCatch(
+        {
+            s <- summary(mar)
+            pp <- s$Parameters
+            out$model <- s$Model
+            out[c("c", "c_lo", "c_hi")] <- unlist(pp[1, c("Estimate", "2.5%", "97.5%")])
+            out[c("z", "z_lo", "z_hi")] <- unlist(pp[2, c("Estimate", "2.5%", "97.5%")])
+            out$c_p <- pp[[1, "Pr(>|t|)"]]
+            out$z_p <- pp[[2, "Pr(>|t|)"]]
+            out$R2_adj <- s$R2a
+            out
+        },
+        error = function(e) out
+    )
+}
+
+# Fit the MAR for each diversity metric in `mtypes`; one row per metric.
+mar_fit_table <- function(mardf, mtypes, atype) {
+    obj <- do.call(rbind, lapply(mtypes, function(x) {
+        mar_fit_summary(mar::MARcalc(mardf, Mtype = x, Atype = atype))
+    }))
+    rownames(obj) <- mtypes
+    obj
+}
+
+# Render a mar_fit_table() as a DT table with readable labels.
+mar_fit_datatable <- function(df) {
+    rownames(df) <- sapply(rownames(df), function(cd) names(Mchoices)[Mchoices == cd])
+    DT::datatable(df,
+        colnames = c(
+            "Diversity metric" = "model",
+            "c" = "c", "c 2.5%" = "c_lo", "c 97.5%" = "c_hi",
+            "z" = "z", "z 2.5%" = "z_lo", "z 97.5%" = "z_hi",
+            "c p-value" = "c_p", "z p-value" = "z_p", "Adjusted R²" = "R2_adj"
+        ),
+        options = list(scrollX = TRUE)
+    ) %>%
+        DT::formatSignif(c("c", "c 2.5%", "c 97.5%"), digits = 4) %>%
+        DT::formatRound(c("z", "z 2.5%", "z 97.5%", "Adjusted R²"), digits = 3) %>%
+        DT::formatSignif(c("c p-value", "z p-value"))
+}
+
+#######################################################################
+# Reproducibility: an empty seed box draws a fresh seed, which is reported
+# back to the user so any run can be repeated exactly.
+resolve_seed <- function(x) {
+    if (is.null(x) || is.na(x)) sample.int(.Machine$integer.max, 1) else as.integer(x)
+}
+
+seed_note <- function(seed) {
+    paste0(
+        "Random seed used: ", seed,
+        ". Enter this seed above (with the same data and settings) to reproduce these results exactly."
+    )
 }

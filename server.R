@@ -1,40 +1,33 @@
 function(input, output, session) {
     #######################################################################
-    # Generate a report for genetic diversity conservation for download
-    report <- eventReactive(input$go0, {
-        req(input$structure_slider, input$mode0)
-
-        params <- list(
-            mode = input$mode0,
-            structure = input$structure_slider,
-            aloss = input$habitat_loss,
-            gtarg = input$gd_target
+    # Conservation estimator. The report is shown with regular shiny tags (no
+    # file is written); a standalone HTML copy is generated only when the user
+    # clicks "Download report", straight into the download's temp path.
+    con_est <- eventReactive(input$go0, {
+        req(input$mode0)
+        isloss <- input$mode0 == "estimate loss"
+        prop <- if (isloss) input$habitat_loss else input$gd_target
+        validate(
+            need(is.numeric(prop) && !is.na(prop) && prop >= 0 && prop <= 1, "Please enter a proportion between 0 and 1."),
+            need(isloss || input$structure_slider > 0, "Population structure (z) must be above 0 to build goals.")
         )
-
-        out_html <- "report.html"
-        rmarkdown::render(
-            input = con_reports[input$mode0],
-            output_file = out_html,
-            params = params,
-            envir = new.env(parent = globalenv())
-        )
-        return(out_html)
+        con_estimate(input$mode0, input$structure_slider, input$habitat_loss, input$gd_target)
     })
 
-    observeEvent(input$go0, {
-        output$reportUI <- renderUI({
-            withMathJax(includeHTML(report()))
-        })
+    output$con_plot <- renderPlot(con_plot(con_est()))
 
-        output$downloadReport <- downloadHandler(
-            filename = function() {
-                paste0("Report_", Sys.Date(), ".html")
-            },
-            content = function(file) {
-                file.copy(report(), file)
-            }
-        )
+    output$reportUI <- renderUI({
+        withMathJax(con_report_tags(con_est(), plotOutput("con_plot")))
     })
+
+    output$downloadReport <- downloadHandler(
+        filename = function() {
+            paste0("Report_", Sys.Date(), ".html")
+        },
+        content = function(file) {
+            con_report_save(con_est(), file)
+        }
+    )
 
     #######################################################################
     # renderUI for Upload data input selection
@@ -149,6 +142,15 @@ function(input, output, session) {
             sfsvec <- sfslist()[[model]]
             data.frame(AC = as.numeric(names(sfsvec)), model = model, value = as.numeric(sfsvec))
         }) %>% dplyr::bind_rows()
+        # The neutral expectation theta/k is an expected number of sites, so it
+        # falls below 1 at high allele counts (and is 0 at k = 0). On a log y-axis
+        # those bins would plot as negative values (or -Inf), implying fewer than
+        # one site; observed counts are integers, so nothing below 1 can be seen
+        # in the data either. Omit them, as the plot.sfs() method in the mar
+        # package effectively does.
+        if (isTRUE(input$log_sfs_y)) {
+            forplot <- forplot[forplot$value >= 1, ]
+        }
         pp <- ggplot(data = forplot, mapping = aes(x = AC, y = value, fill = model, color = model, group = model))
         if (input$sfs_plottype %in% c("bar", "both")) {
             pp <- pp + geom_col(position = "dodge", alpha = if (input$sfs_plottype == "both") 0.5 else 1)
@@ -168,6 +170,8 @@ function(input, output, session) {
 
     #######################################################################
     # Calculate MAR only when "Calculate MAR/GDAR" is clicked.
+    seed_mar <- eventReactive(input$go3, resolve_seed(input$seed))
+
     mardf <- eventReactive(input$go3, {
         req(gm())
         withProgress(message = "Calculating MAR ...", {
@@ -176,9 +180,15 @@ function(input, output, session) {
                 scheme = input$scheme,
                 nrep = input$nrep,
                 xfrac = 0.01,
-                quorum = TRUE
+                quorum = TRUE,
+                myseed = seed_mar()
             )
         })
+    })
+
+    output$seed_used_mar <- renderText({
+        req(mardf())
+        seed_note(seed_mar())
     })
 
     # snapshot the settings used for this calculation, so downstream sliders
@@ -189,32 +199,18 @@ function(input, output, session) {
 
     # Build MAR
     marres <- eventReactive(input$go3, {
-        mars <- lapply(mtype_mar(), function(x) mar::MARcalc(mardf(), Mtype = x, Atype = atype_mar()))
-        names(mars) <- mtype_mar()
-        marsuml <- lapply(mars, mar:::.marsummary)
-        obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
-        rownames(obj) <- mtype_mar()
-        return(obj)
+        mar_fit_table(mardf(), mtype_mar(), atype_mar())
     })
 
-    # Print MAR results (row names and column labels match the plotting panel)
+    # Print MAR results with 95% CIs (row names and column labels match the plotting panel)
     output$print_marres <- DT::renderDataTable({
-        df <- marres()
-        rownames(df) <- sapply(rownames(df), function(cd) names(Mchoices)[Mchoices == cd])
-        DT::datatable(df,
-            colnames = c(
-                "Diversity metric" = "model", "c" = "c", "z" = "z",
-                "c p-value" = "c_p", "z p-value" = "z_p", "Adjusted R²" = "R2_adj"
-            )
-        ) %>%
-            DT::formatRound(., c("c", "z", "Adjusted R²")) %>%
-            DT::formatSignif(., c("c p-value", "z p-value"))
+        mar_fit_datatable(marres())
     })
 
     # Option to download mardf()
     output$download_mardf <- downloadHandler(
         filename = function() {
-            paste0("mardf_", Sys.Date(), ".csv")
+            paste0("mardf_seed", seed_mar(), "_", Sys.Date(), ".csv")
         },
         content = function(file) {
             write.csv(mardf(), file)
@@ -289,6 +285,8 @@ function(input, output, session) {
 
     #######################################################################
     # Run extinction simulations only when "Simulate extinction" is clicked.
+    seed_ext <- eventReactive(input$go4, resolve_seed(input$seed_ext))
+
     extdf <- eventReactive(input$go4, {
         req(gm())
         withProgress(message = "Simulating extinction ...", {
@@ -296,9 +294,15 @@ function(input, output, session) {
                 gm = gm(),
                 scheme = input$scheme_ext,
                 nrep = input$nrep_ext,
-                xfrac = 0.01
+                xfrac = 0.01,
+                myseed = seed_ext()
             )
         })
+    })
+
+    output$seed_used_ext <- renderText({
+        req(extdf())
+        seed_note(seed_ext())
     })
 
     nrep_ext <- eventReactive(input$go4, input$nrep_ext)
@@ -307,32 +311,18 @@ function(input, output, session) {
 
     # Build MAR based on EXT data
     extres <- eventReactive(input$go4, {
-        mars <- lapply(mtype_ext(), function(x) mar::MARcalc(extdf(), Mtype = x, Atype = atype_ext()))
-        names(mars) <- mtype_ext()
-        marsuml <- lapply(mars, mar:::.marsummary)
-        obj <- do.call(rbind, lapply(marsuml, as.data.frame, stringsAsFactors = FALSE))
-        rownames(obj) <- mtype_ext()
-        return(obj)
+        mar_fit_table(extdf(), mtype_ext(), atype_ext())
     })
 
-    # Print MAR results based on EXT data
+    # Print MAR results based on EXT data, with 95% CIs
     output$print_extres <- DT::renderDataTable({
-        df <- extres()
-        rownames(df) <- sapply(rownames(df), function(cd) names(Mchoices)[Mchoices == cd])
-        DT::datatable(df,
-            colnames = c(
-                "Diversity metric" = "model", "c" = "c", "z" = "z",
-                "c p-value" = "c_p", "z p-value" = "z_p", "Adjusted R²" = "R2_adj"
-            )
-        ) %>%
-            DT::formatRound(., c("c", "z", "Adjusted R²")) %>%
-            DT::formatSignif(., c("c p-value", "z p-value"))
+        mar_fit_datatable(extres())
     })
 
     # Option to download extdf()
     output$download_extdf <- downloadHandler(
         filename = function() {
-            paste0("extdf_", Sys.Date(), ".csv")
+            paste0("extdf_seed", seed_ext(), "_", Sys.Date(), ".csv")
         },
         content = function(file) {
             write.csv(extdf(), file)
@@ -412,15 +402,5 @@ function(input, output, session) {
         terra::plot(sm, add = T, col = SAMPLEMAP_PAL, legend.mar = 3, legend.args = list(text = "# of genomes", side = 2))
         rr[setdiff(gm()$maps$cellid, extl[[input$a_ext]])] <- 1
         terra::plot(rr, add = T, col = "black", legend = FALSE)
-    })
-
-    session$onSessionEnded(function() {
-        tempfiles <- c(
-            list.files(pattern = "^mardf"), list.files(pattern = "^extdf"), list.files(pattern = "report.html"),
-            list.files(pattern = "^Report.+html$")
-        )
-        if (length(tempfiles) > 0) {
-            sapply(tempfiles, unlink)
-        }
     })
 }
