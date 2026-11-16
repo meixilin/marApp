@@ -120,7 +120,7 @@ con_plot <- function(est) {
         annotate("text", x = 0, y = est$Mtar, label = scales::percent(est$Mtar), hjust = -0.2, size = 3.5) +
         scale_x_continuous(labels = scales::percent) +
         scale_y_continuous(labels = scales::percent) +
-        labs(x = "% of Area lost", y = "% of Segregating sites remained")
+        labs(x = "% of Area lost", y = "% of Mutations remained")
 }
 
 # Report body as shiny tags. `plot` is the tag that shows the figure: a
@@ -139,7 +139,7 @@ con_report_tags <- function(est, plot) {
         p("$$M = cA^z$$"),
         p("where:"),
         tags$ul(
-            tags$li("\\(M\\) is the genetic diversity measured as the number of segregating mutations,"),
+            tags$li("\\(M\\) is the genetic diversity measured as the number of mutations,"),
             tags$li("\\(A\\) is the area sampled for genetic data,"),
             tags$li("\\(z\\) is the scaling exponent, influenced by population structure, demographic history, and species biological traits.")
         ),

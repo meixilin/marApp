@@ -36,16 +36,39 @@ function(input, output, session) {
         if (input$mode == "Custom") {
             tagList(
                 includeMarkdown("docs/upload_req.md"),
+                radioButtons("filetype",
+                             label = "Text or VCF-based genotypes?",
+                             choices = c("Text", "VCF"), selected = "Text"),
                 fileInput(
                     inputId = "in_coords",
                     label = "Coordinate file",
                     accept = c(".txt", ".csv", ".tsv", ".gz")
                 ),
+                uiOutput('genoInput')
+            )
+        }
+    })
+
+    output$genoInput <- renderUI({
+        req(input$mode == "Custom", input$filetype)
+        if (input$filetype == 'Text') {
+            tagList(
                 fileInput(
-                    inputId = "in_genomes",
-                    label = "Genotype file",
-                    accept = c(".txt", ".csv", ".tsv", ".vcf", ".gz")
+                    inputId = "in_genofn",
+                    label = "Text genotype file",
+                    accept = c(".txt", ".csv", ".tsv", ".gz")
+                ),
+                fileInput(
+                    inputId = "in_sampfn",
+                    label = "(Optional) Sample ID file",
+                    accept = c(".txt", ".csv", ".tsv")
                 )
+            )
+        } else if (input$filetype == 'VCF') {
+            fileInput(
+                inputId = "in_vcf",
+                label = "VCF genotype file",
+                accept = c(".vcf", ".gz")
             )
         }
     })
@@ -69,12 +92,13 @@ function(input, output, session) {
     genodata <- reactive({
         req(input$go1)
         if (input$mode == "Custom") {
-            req(input$in_genomes)
-            mypath <- input$in_genomes$datapath
-            if (grepl(".vcf", input$in_genomes$name)) {
+            if (input$filetype == 'Text') {
+                mypath <- input$in_genofn$datapath
+                samppath <- ifelse(is.null(input$in_sampfn), NULL, input$in_sampfn$datapath)
+                obj <- safe_parse(mar::text_parser(mypath, samp.fn = samppath), "genotype file")
+            } else if (input$filetype == 'VCF') {
+                mypath <- input$in_vcf$datapath
                 obj <- safe_parse(quiet(mar::vcf_parser(mypath)), "genotype file")
-            } else {
-                obj <- safe_parse(mar::text_parser(mypath), "genotype file")
             }
         } else {
             obj <- mar::gm1001g$geno
