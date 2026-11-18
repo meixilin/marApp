@@ -12,13 +12,14 @@ Although shinyapps.io is secure-by-design, users should avoid uploading sensitiv
 2. Allowed file extensions are ".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz".
 3. The first line should consist of exactly three columns: `ID`,`LON`,`LAT` (or `ID`,`LONGITUDE`,`LATITUDE`), in that order. No extra columns are allowed.
     1. If VCF genotype file is provided, the `ID` column should match the sample IDs in the VCF file.
-    2. If text genotype file is provided, the `ID` column should be sequential integers starting from 1. Please make sure that the samples are in the same order as the genotype file.
+    2. If text genotype file is provided and **no** sample id file is provided, the `ID` column should be **sequential integers starting from 1**. Please make sure that the samples are in the same order as the genotype file.
+    3. If text genotype file is provided and a sample id file is provided, the `ID` column should match the sample IDs in the sample id file.
 4. Sample IDs must be unique, and every sample with genotype data must have a paired longitude and latitude.
 5. Coordinates are interpreted as decimal degrees on WGS84 (EPSG:4326).
     - If coordinates span more than 10 degrees, coordinates are reprojected onto the Equal Earth Greenwich (EPSG: 8857) to preserve equal area per grid cell. Otherwise, coordinates are kept on WGS84 (EPSG:4326) for downstream analysis.
 6. No missing values allowed.
 
-Example file with 5 samples:
+Example file with 5 samples and **no** sample id file is provided:
 
 ```
 ID	LON	LAT
@@ -41,7 +42,7 @@ Text file and VCF files are allowed. Overall,
 - The `marApp` only supports diploid organisms. For handling of other ploidy, please use the `mar` R package.
 - If the reference genome is divergent from the species/population of interest, set the major allele as the reference allele to avoid issues with ancestral state identification.
 
-_Text genotype file_
+*Text genotype file*
 
 1. Files should be tab-delimited or comma-delimited.
 2. Allowed file extensions are ".txt", ".txt.gz", ".csv", ".csv.gz", ".tsv", ".tsv.gz".
@@ -51,7 +52,7 @@ _Text genotype file_
 5. Missing genotypes should be marked as `NA`.
 6. In the example below, the value of 1 at row 2 and column 3 represents that sample NO.3 has one copy of the alternative allele at SNP NO.2.
 
-Example file with 5 samples and 10 SNPs:
+Example text genotype file with 5 samples and 10 SNPs:
 
 ```
 0	0	2	0	0
@@ -65,6 +66,19 @@ Example file with 5 samples and 10 SNPs:
 1	2	0	1	2
 0	0	2	0	0
 ```
+
+Optionally, a sample ID file can be provided separatedly. It should have just one sample ID per line and NO header.
+
+Example sample ID file matching the 5 samples in the example text genotype file above:
+
+```
+88
+108
+139
+159
+sampleX
+```
+
 
 *VCF genotype file*
 

@@ -93,10 +93,12 @@ function(input, output, session) {
         req(input$go1)
         if (input$mode == "Custom") {
             if (input$filetype == 'Text') {
+                req(input$in_genofn)
                 mypath <- input$in_genofn$datapath
-                samppath <- ifelse(is.null(input$in_sampfn), NULL, input$in_sampfn$datapath)
+                samppath <- if (isTruthy(input$in_sampfn)) input$in_sampfn$datapath else NULL
                 obj <- safe_parse(mar::text_parser(mypath, samp.fn = samppath), "genotype file")
             } else if (input$filetype == 'VCF') {
+                req(input$in_vcf)
                 mypath <- input$in_vcf$datapath
                 obj <- safe_parse(quiet(mar::vcf_parser(mypath)), "genotype file")
             }
@@ -130,9 +132,11 @@ function(input, output, session) {
     #######################################################################
     # Print data
     output$print_mapsdata <- renderPrint({
+        req(mapsdata())
         mar:::print.marmaps(mapsdata())
     })
     output$print_genodata <- renderPrint({
+        req(genodata())
         mar:::print.margeno(genodata())
     })
 
@@ -140,6 +144,7 @@ function(input, output, session) {
     # Plot leaflet
     # TODO: leaflet automatically reprojects, so the raster is not exactly what used
     output$map_genomaps <- leaflet::renderLeaflet({
+        req(gm())
         maps <- gm()$maps
         # coordinates are stored in the map CRS, so reproject onto lon/lat degrees
         # before handing them to leaflet
@@ -177,6 +182,7 @@ function(input, output, session) {
 
     # plot sfs (bars, density curves, or both)
     output$plot_sfsdf <- renderPlotly({
+        req(sfslist())
         forplot <- lapply(names(sfslist()), function(model) {
             sfsvec <- sfslist()[[model]]
             data.frame(AC = as.numeric(names(sfsvec)), model = model, value = as.numeric(sfsvec))
@@ -243,6 +249,7 @@ function(input, output, session) {
 
     # Print MAR results with 95% CIs (row names and column labels match the plotting panel)
     output$print_marres <- DT::renderDataTable({
+        req(marres())
         mar_fit_datatable(marres())
     })
 
@@ -382,7 +389,7 @@ function(input, output, session) {
 
     # Plot EXT results (% lost vs % lost)
     output$plot_extdf <- renderPlotly({
-        req(input$Mtype_plot_ext)
+        req(input$Mtype_plot_ext, extdf())
         forplot <- extdf()[, c(atype_ext(), input$Mtype_plot_ext, "repid")] %>% na.omit()
         # generate percentages data
         forplot[, 1] <- 1 - forplot[, 1] / max(forplot[, 1])
